@@ -8,8 +8,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
 
   frontend:
     build: ./frontend
@@ -30,17 +32,25 @@ services:
       - MYSQL_PASSWORD=password
       - MYSQL_DATABASE=nids
       - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_PORT=8123
       - CLICKHOUSE_DATABASE=nids
     depends_on:
-      - redis
-      - mysql
-      - clickhouse
+      redis:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   mysql:
     image: mysql:8.0
@@ -50,12 +60,22 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   redis_data:

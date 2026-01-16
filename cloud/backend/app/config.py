@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     mysql_database: str = "nids"
 
     clickhouse_host: str = "localhost"
-    clickhouse_port: int = 9000
+    clickhouse_port: int = 8123  # HTTP 端口，clickhouse-connect 使用 HTTP 接口
     clickhouse_database: str = "nids"
 
     rule_cache_ttl: int = 3600
