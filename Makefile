@@ -1,7 +1,7 @@
 # AI-IDPS 项目管理命令
 #
 # ============ 统一服务管理命令 ============
-#   make build [SERVICE=xxx]    - 构建服务 (cloud服务/probe-manager)
+#   make build [SERVICE=xxx]    - 构建服务 (cloud服务/probe-manager/nids-probe)
 #   make rebuild [SERVICE=xxx]  - 完全重新构建服务
 #   make up [SERVICE=xxx]       - 启动服务
 #   make down [SERVICE=xxx]     - 停止服务
@@ -16,6 +16,7 @@
 #   nginx           - Nginx代理
 #   redis/mysql/clickhouse - 数据库服务
 #   probe-manager   - Probe Manager (C++本地服务)
+#   nids-probe      - NIDS Probe (C++本地服务)
 #
 # ============ 测试 ============
 #   make test-api           - 运行云端 API 测试
@@ -37,11 +38,19 @@ PROBE_LOG_FILE := /tmp/probe-manager.log
 PROBE_SERVICE_FILE := /etc/systemd/system/probe-manager.service
 PROBE_SERVICE_TEMPLATE := scripts/probe-manager.service
 
+# NIDS Probe 配置
+NIDS_BIN := $(PROBE_BUILD_DIR)/nids/nids-probe
+NIDS_INTERFACE ?= eth0
+NIDS_PID_FILE := /tmp/nids-probe.pid
+NIDS_LOG_FILE := /tmp/nids-probe.log
+SURICATA_CONFIG ?= /etc/suricata/suricata.yaml
+
 # 可选的服务参数
 SERVICE ?=
 
 .PHONY: build rebuild restart up down logs list status \
         probe-clean probe-install probe-uninstall \
+        nids-run nids-install nids-uninstall \
         test-api test-probe test-stress test-all help \
         install-service uninstall-service
 
@@ -54,8 +63,18 @@ build:
 ifeq ($(SERVICE),probe-manager)
 	@echo "Building Probe Manager..."
 	@mkdir -p $(PROBE_BUILD_DIR)
-	@cd $(PROBE_BUILD_DIR) && cmake .. && make -j$$(nproc)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) probe-manager
 	@echo "Build complete: $(PROBE_BIN)"
+else ifeq ($(SERVICE),nids-probe)
+	@echo "Building NIDS Probe..."
+	@mkdir -p $(PROBE_BUILD_DIR)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) nids-probe
+	@echo "Build complete: $(NIDS_BIN)"
+else ifeq ($(SERVICE),probes)
+	@echo "Building all probes (Manager + NIDS)..."
+	@mkdir -p $(PROBE_BUILD_DIR)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc)
+	@echo "Build complete: $(PROBE_BIN) $(NIDS_BIN)"
 else ifdef SERVICE
 	$(DOCKER_COMPOSE) build $(SERVICE)
 else
@@ -69,8 +88,22 @@ ifeq ($(SERVICE),probe-manager)
 	@rm -rf $(PROBE_BUILD_DIR)
 	@echo "Building Probe Manager..."
 	@mkdir -p $(PROBE_BUILD_DIR)
-	@cd $(PROBE_BUILD_DIR) && cmake .. && make -j$$(nproc)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) probe-manager
 	@echo "Rebuild complete: $(PROBE_BIN)"
+else ifeq ($(SERVICE),nids-probe)
+	@echo "Cleaning NIDS Probe build..."
+	@rm -rf $(PROBE_BUILD_DIR)
+	@echo "Building NIDS Probe..."
+	@mkdir -p $(PROBE_BUILD_DIR)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) nids-probe
+	@echo "Rebuild complete: $(NIDS_BIN)"
+else ifeq ($(SERVICE),probes)
+	@echo "Cleaning all probes build..."
+	@rm -rf $(PROBE_BUILD_DIR)
+	@echo "Building all probes..."
+	@mkdir -p $(PROBE_BUILD_DIR)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc)
+	@echo "Rebuild complete"
 else ifdef SERVICE
 	$(DOCKER_COMPOSE) build --no-cache $(SERVICE)
 else
@@ -285,6 +318,88 @@ probe-uninstall:
 	@echo "Uninstalled."
 
 # ============================================================
+# NIDS Probe 额外命令
+# ============================================================
+
+# 前台运行 NIDS Probe (调试用)
+nids-run:
+	@if [ ! -f $(NIDS_BIN) ]; then \
+		echo "NIDS Probe not built. Run 'make build SERVICE=nids-probe' first."; \
+		exit 1; \
+	fi
+	@echo "Starting NIDS Probe on interface $(NIDS_INTERFACE) (foreground mode)..."
+	@$(NIDS_BIN) --manager 127.0.0.1:$(PROBE_PORT) --interface $(NIDS_INTERFACE) \
+		--config $(SURICATA_CONFIG)
+
+# 安装 NIDS Probe 到系统
+nids-install:
+	@echo "Installing NIDS Probe..."
+	@if [ ! -f $(NIDS_BIN) ]; then \
+		echo "NIDS Probe not built. Run 'make build SERVICE=nids-probe' first."; \
+		exit 1; \
+	fi
+	@sudo cp $(NIDS_BIN) /usr/local/bin/
+	@echo "Installed to /usr/local/bin/nids-probe"
+
+# 卸载 NIDS Probe
+nids-uninstall:
+	@echo "Uninstalling NIDS Probe..."
+	@sudo rm -f /usr/local/bin/nids-probe
+	@echo "Uninstalled."
+
+# 后台启动 NIDS Probe
+nids-up:
+	@if [ ! -f $(NIDS_BIN) ]; then \
+		echo "NIDS Probe not built. Run 'make build SERVICE=nids-probe' first."; \
+		exit 1; \
+	fi
+	@if [ -f $(NIDS_PID_FILE) ] && kill -0 $$(cat $(NIDS_PID_FILE)) 2>/dev/null; then \
+		echo "NIDS Probe is already running (PID: $$(cat $(NIDS_PID_FILE)))"; \
+		exit 0; \
+	fi
+	@echo "Starting NIDS Probe in background..."
+	@nohup $(NIDS_BIN) --manager 127.0.0.1:$(PROBE_PORT) --interface $(NIDS_INTERFACE) \
+		--config $(SURICATA_CONFIG) > $(NIDS_LOG_FILE) 2>&1 & \
+		echo $$! > $(NIDS_PID_FILE)
+	@sleep 1
+	@if kill -0 $$(cat $(NIDS_PID_FILE)) 2>/dev/null; then \
+		echo "NIDS Probe started (PID: $$(cat $(NIDS_PID_FILE)))"; \
+		echo "Interface: $(NIDS_INTERFACE)"; \
+		echo "Log file: $(NIDS_LOG_FILE)"; \
+	else \
+		echo "Failed to start NIDS Probe. Check logs:"; \
+		cat $(NIDS_LOG_FILE); \
+		rm -f $(NIDS_PID_FILE); \
+		exit 1; \
+	fi
+
+# 停止 NIDS Probe
+nids-down:
+	@if [ -f $(NIDS_PID_FILE) ]; then \
+		PID=$$(cat $(NIDS_PID_FILE)); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "Stopping NIDS Probe (PID: $$PID)..."; \
+			kill $$PID; \
+			rm -f $(NIDS_PID_FILE); \
+			echo "Stopped."; \
+		else \
+			echo "NIDS Probe not running (stale PID file)."; \
+			rm -f $(NIDS_PID_FILE); \
+		fi \
+	else \
+		echo "NIDS Probe PID file not found."; \
+		pkill -f nids-probe || echo "No nids-probe process found."; \
+	fi
+
+# 查看 NIDS Probe 日志
+nids-logs:
+	@if [ -f $(NIDS_LOG_FILE) ]; then \
+		tail -f $(NIDS_LOG_FILE); \
+	else \
+		echo "Log file not found: $(NIDS_LOG_FILE)"; \
+	fi
+
+# ============================================================
 # Systemd 服务管理
 # ============================================================
 
@@ -374,12 +489,22 @@ help:
 	@echo "  mysql         MySQL服务"
 	@echo "  clickhouse    ClickHouse服务"
 	@echo "  probe-manager Probe Manager (C++本地服务)"
+	@echo "  nids-probe    NIDS Probe (C++本地服务)"
+	@echo "  probes        所有探针 (Manager + NIDS)"
 	@echo ""
 	@echo "Probe Manager 专用命令:"
 	@echo "  make probe-run              前台运行 (调试用)"
 	@echo "  make probe-clean            清理构建产物"
 	@echo "  make probe-install          安装到系统"
 	@echo "  make probe-uninstall        从系统卸载"
+	@echo ""
+	@echo "NIDS Probe 专用命令:"
+	@echo "  make nids-run               前台运行 (调试用)"
+	@echo "  make nids-up                后台启动"
+	@echo "  make nids-down              停止"
+	@echo "  make nids-logs              查看日志"
+	@echo "  make nids-install           安装到系统"
+	@echo "  make nids-uninstall         从系统卸载"
 	@echo ""
 	@echo "Systemd 服务管理:"
 	@echo "  make install-service        安装为 systemd 服务"

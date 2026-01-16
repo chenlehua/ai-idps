@@ -1,0 +1,38 @@
+[Unit]
+Description=NIDS Probe - Network Intrusion Detection System Probe
+After=network.target probe-manager.service
+Wants=probe-manager.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# 可配置环境变量
+Environment=MANAGER_HOST=127.0.0.1
+Environment=MANAGER_PORT=9010
+Environment=INTERFACE=eth0
+Environment=SURICATA_CONFIG=/etc/suricata/suricata.yaml
+Environment=LOG_DIR=/var/log/suricata
+Environment=PROBE_ID=
+
+ExecStart=/usr/local/bin/nids-probe \
+    --manager ${MANAGER_HOST}:${MANAGER_PORT} \
+    --interface ${INTERFACE} \
+    --config ${SURICATA_CONFIG} \
+    --log-dir ${LOG_DIR}
+
+Restart=on-failure
+RestartSec=10
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nids-probe
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{
+    "manager_host": "127.0.0.1",
+    "manager_port": 9010,
+    "interface": "eth0",
+    "suricata_config": "/etc/suricata/suricata.yaml",
+    "rules_path": "",
+    "log_dir": "/var/log/suricata",
+    "probe_id": ""
+}
