@@ -1,0 +1,143 @@
+### NIDS Backend API 测试用例
+### 使用方法：将以下 curl 命令复制到终端执行
+
+### ========================================
+### 健康检查
+### ========================================
+
+# 健康检查
+# curl -X GET http://localhost/health
+
+### ========================================
+### 探针通信接口 POST /api/v1/probe
+### ========================================
+
+# 1. 探针注册 (cmd=30)
+# curl -X POST http://localhost/api/v1/probe \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "cmd": 30,
+#     "data": {
+#       "probe_id": "probe-001",
+#       "name": "测试探针1",
+#       "ip": "192.168.1.100",
+#       "probe_types": ["nids"]
+#     }
+#   }'
+
+# 2. 心跳请求 (cmd=20)
+# curl -X POST http://localhost/api/v1/probe \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "cmd": 20,
+#     "data": {
+#       "probe_id": "probe-001",
+#       "rule_version": null,
+#       "status": {
+#         "cpu_usage": 25.5,
+#         "memory_usage": 512,
+#         "uptime": 3600
+#       },
+#       "probes": [
+#         {
+#           "type": "nids",
+#           "id": "probe-001-nids",
+#           "status": "running",
+#           "interface": "eth0"
+#         }
+#       ]
+#     }
+#   }'
+
+# 3. 规则下载请求 (cmd=40) - 需要先创建规则
+# curl -X POST http://localhost/api/v1/probe \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "cmd": 40,
+#     "data": {
+#       "probe_id": "probe-001",
+#       "version": "v1234567890"
+#     }
+#   }'
+
+# 4. 日志上报 (cmd=10)
+# curl -X POST http://localhost/api/v1/probe \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "cmd": 10,
+#     "data": {
+#       "probe_id": "probe-001",
+#       "logs": [
+#         {
+#           "probe_type": "nids",
+#           "instance_id": "probe-001-nids",
+#           "timestamp": "2024-01-15T10:30:00.123Z",
+#           "src_ip": "192.168.1.100",
+#           "dest_ip": "10.0.0.1",
+#           "src_port": 54321,
+#           "dest_port": 80,
+#           "protocol": "TCP",
+#           "alert": {
+#             "signature": "ET MALWARE Suspicious User-Agent",
+#             "signature_id": 2000001,
+#             "severity": 1,
+#             "category": "malware"
+#           },
+#           "raw": "{\"original\":\"log\"}"
+#         }
+#       ]
+#     }
+#   }'
+
+### ========================================
+### 规则管理接口
+### ========================================
+
+# 5. 获取规则列表
+# curl -X GET http://localhost/api/v1/rules
+
+# 6. 创建新规则版本
+# curl -X POST http://localhost/api/v1/rules \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "content": "# Suricata Rules\nalert tcp any any -> any any (msg:\"Test Rule\"; sid:1000001; rev:1;)",
+#     "description": "测试规则版本"
+#   }'
+
+# 7. 获取最新规则
+# curl -X GET http://localhost/api/v1/rules/latest
+
+# 8. 获取指定版本规则 (替换 VERSION 为实际版本号)
+# curl -X GET http://localhost/api/v1/rules/VERSION
+
+### ========================================
+### 日志查询接口
+### ========================================
+
+# 9. 查询告警日志
+# curl -X GET "http://localhost/api/v1/logs?limit=10"
+
+# 10. 带过滤条件查询日志
+# curl -X GET "http://localhost/api/v1/logs?probe_id=probe-001&severity=1&limit=10"
+
+# 11. 获取日志统计
+# curl -X GET "http://localhost/api/v1/logs/stats?hours=24"
+
+### ========================================
+### 探针管理接口
+### ========================================
+
+# 12. 获取探针列表
+# curl -X GET http://localhost/api/v1/probes
+
+# 13. 获取探针详情
+# curl -X GET http://localhost/api/v1/probes/probe-001
+
+### ========================================
+### WebSocket 测试 (使用 websocat 或浏览器)
+### ========================================
+
+# 14. WebSocket 连接测试
+# websocat ws://localhost/api/v1/ws/logs
+# 发送: {"action": "subscribe", "filters": {}}
+# 发送: {"action": "ping"}
