@@ -81,8 +81,14 @@ else
 fi
 
 # 检查 Probe Manager
-if nc -z 127.0.0.1 $MANAGER_PORT 2>/dev/null; then
+if command -v nc &> /dev/null && nc -z 127.0.0.1 $MANAGER_PORT 2>/dev/null; then
     echo -e "${GREEN}✓${NC} Probe Manager is listening on port $MANAGER_PORT"
+    MANAGER_RUNNING=true
+elif timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$MANAGER_PORT" 2>/dev/null; then
+    echo -e "${GREEN}✓${NC} Probe Manager is listening on port $MANAGER_PORT"
+    MANAGER_RUNNING=true
+elif pgrep -x "probe-manager" > /dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} Probe Manager is running (process found)"
     MANAGER_RUNNING=true
 else
     echo -e "${YELLOW}!${NC} Probe Manager is not listening on port $MANAGER_PORT"
@@ -112,10 +118,10 @@ check_tool() {
     fi
 }
 
-HAVE_NMAP=$(check_tool nmap && echo true || echo false)
-HAVE_CURL=$(check_tool curl && echo true || echo false)
-HAVE_NC=$(check_tool nc && echo true || echo false)
-HAVE_PYTHON=$(check_tool python3 && echo true || echo false)
+if check_tool nmap; then HAVE_NMAP=true; else HAVE_NMAP=false; fi
+if check_tool curl; then HAVE_CURL=true; else HAVE_CURL=false; fi
+if check_tool nc; then HAVE_NC=true; else HAVE_NC=false; fi
+if check_tool python3; then HAVE_PYTHON=true; else HAVE_PYTHON=false; fi
 
 echo ""
 
