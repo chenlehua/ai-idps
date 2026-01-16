@@ -31,14 +31,15 @@
 
 按照这个想法，帮我生成详细的需求和设计文档，放在./specs/0001-spec.md 文件中, 输出为中文。
 
-
-# make
+## make
 
 请优化Makefile，将make probe-*系列命令集成到make build SERVICE=probe-manager系列命令，probe-manager支持以systemctl服务运行，支持make list查看状态。重构make list，当服务未启动、启动失败也支持查看状态;
 
+请深度优化Makefile, 去掉测试相关命令，去掉其它不必要的命令，只包含编译、启停服务、安装卸载、查看所有服务状态、清理、查看各服务日志等功能，让用户的使用体验正好，优化完成后请执行所有这些命令，确保所有命令能正常执行。
+
+## test
+
 请编译启动相关服务，运行./fixtures下所有黑盒测试用例，尽最大努力修复相关缺陷。
-
-
 
 ## phase 5
 

@@ -1,6 +1,6 @@
 # AI-IDPS 项目管理命令
 #
-# ============ 统一服务管理命令 ============
+# ============ 命令说明 ============
 #   make build [SERVICE=xxx]    - 构建服务
 #   make rebuild [SERVICE=xxx]  - 完全重新构建服务
 #   make up [SERVICE=xxx]       - 启动服务
@@ -10,7 +10,6 @@
 #   make clean [SERVICE=xxx]    - 清理构建产物
 #   make install [SERVICE=xxx]  - 安装到系统
 #   make uninstall [SERVICE=xxx]- 从系统卸载
-#   make run [SERVICE=xxx]      - 前台运行(调试用)
 #   make list                   - 查看所有服务状态
 #
 # ============ SERVICE 可选值 ============
@@ -23,11 +22,6 @@
 #   nids-probe      - NIDS Probe (C++本地服务)
 #   probes          - 所有探针 (Manager + NIDS)
 #   suricata        - Suricata 检测引擎
-#
-# ============ 测试 ============
-#   make test-api           - 运行云端 API 测试
-#   make test-probe         - 运行探针黑盒测试
-#   make test-all           - 运行所有测试
 
 # ============ 配置 ============
 COMPOSE_FILE := cloud/docker-compose.yml
@@ -64,8 +58,7 @@ NIDS_SERVICE_TEMPLATE := scripts/nids-probe.service
 # 可选的服务参数
 SERVICE ?=
 
-.PHONY: build rebuild up down restart logs clean install uninstall run \
-        list status test-api test-probe test-nids test-stress test-all help
+.PHONY: build rebuild up down restart logs clean install uninstall download-rules list status help
 
 # ============================================================
 # 构建命令
@@ -144,7 +137,21 @@ endif
 # ============================================================
 
 up:
-ifeq ($(SERVICE),probe-manager)
+ifeq ($(SERVICE),suricata)
+	@if systemctl is-active --quiet suricata 2>/dev/null; then \
+		echo "Suricata is already running"; \
+	else \
+		echo "Starting Suricata..."; \
+		sudo systemctl start suricata; \
+		sleep 2; \
+		if systemctl is-active --quiet suricata 2>/dev/null; then \
+			echo "Suricata started successfully"; \
+		else \
+			echo "Failed to start Suricata. Check: journalctl -u suricata"; \
+			exit 1; \
+		fi; \
+	fi
+else ifeq ($(SERVICE),probe-manager)
 	@if [ ! -f $(PROBE_BIN) ]; then \
 		echo "Probe Manager not built. Run 'make build SERVICE=probe-manager' first."; \
 		exit 1; \
@@ -203,7 +210,11 @@ else
 endif
 
 down:
-ifeq ($(SERVICE),probe-manager)
+ifeq ($(SERVICE),suricata)
+	@echo "Stopping Suricata..."
+	@sudo systemctl stop suricata 2>/dev/null || true
+	@echo "Suricata stopped."
+else ifeq ($(SERVICE),probe-manager)
 	@if systemctl is-active --quiet probe-manager 2>/dev/null; then \
 		echo "Stopping Probe Manager systemd service..."; \
 		sudo systemctl stop probe-manager; \
@@ -244,7 +255,17 @@ else
 endif
 
 restart:
-ifeq ($(SERVICE),probe-manager)
+ifeq ($(SERVICE),suricata)
+	@echo "Restarting Suricata..."
+	@sudo systemctl restart suricata
+	@sleep 2
+	@if systemctl is-active --quiet suricata 2>/dev/null; then \
+		echo "Suricata restarted successfully"; \
+	else \
+		echo "Failed to restart Suricata. Check: journalctl -u suricata"; \
+		exit 1; \
+	fi
+else ifeq ($(SERVICE),probe-manager)
 	@$(MAKE) down SERVICE=probe-manager
 	@sleep 1
 	@$(MAKE) up SERVICE=probe-manager
@@ -267,7 +288,15 @@ endif
 # ============================================================
 
 logs:
-ifeq ($(SERVICE),probe-manager)
+ifeq ($(SERVICE),suricata)
+	@if systemctl is-active --quiet suricata 2>/dev/null; then \
+		sudo journalctl -u suricata -f; \
+	elif [ -f /var/log/suricata/suricata.log ]; then \
+		sudo tail -f /var/log/suricata/suricata.log; \
+	else \
+		echo "Suricata is not running and no log file found."; \
+	fi
+else ifeq ($(SERVICE),probe-manager)
 	@if [ -f $(PROBE_LOG_FILE) ]; then \
 		tail -f $(PROBE_LOG_FILE); \
 	elif systemctl is-active --quiet probe-manager 2>/dev/null; then \
@@ -412,28 +441,23 @@ else
 endif
 
 # ============================================================
-# 前台运行(调试)
+# 规则下载
 # ============================================================
 
-run:
-ifeq ($(SERVICE),probe-manager)
-	@if [ ! -f $(PROBE_BIN) ]; then \
-		echo "Probe Manager not built. Run 'make build SERVICE=probe-manager' first."; \
-		exit 1; \
-	fi
-	@echo "Starting Probe Manager in foreground (Port: $(PROBE_PORT))..."
-	@LISTEN_PORT=$(PROBE_PORT) CLOUD_URL=$(CLOUD_URL) $(PROBE_BIN)
-else ifeq ($(SERVICE),nids-probe)
-	@if [ ! -f $(NIDS_BIN) ]; then \
-		echo "NIDS Probe not built. Run 'make build SERVICE=nids-probe' first."; \
-		exit 1; \
-	fi
-	@echo "Starting NIDS Probe in foreground (Interface: $(NIDS_INTERFACE))..."
-	@$(NIDS_BIN) --manager 127.0.0.1:$(PROBE_PORT) --interface $(NIDS_INTERFACE) \
-		--config $(SURICATA_CONFIG)
-else
-	@echo "Usage: make run SERVICE=<probe-manager|nids-probe>"
-endif
+RULES_DIR := /var/lib/suricata/rules
+
+download-rules:
+	@echo "=== Downloading Suricata Rules ==="
+	@sudo mkdir -p $(RULES_DIR)
+	@echo "Downloading ET Open rules..."
+	@sudo curl -L -o /tmp/emerging.rules.tar.gz \
+		"https://rules.emergingthreats.net/open/suricata-6.0/emerging.rules.tar.gz"
+	@echo "Extracting rules..."
+	@sudo tar xzf /tmp/emerging.rules.tar.gz -C $(RULES_DIR) --strip-components=1
+	@sudo rm -f /tmp/emerging.rules.tar.gz
+	@echo "Rules downloaded to $(RULES_DIR)"
+	@echo "Rule files:"
+	@ls $(RULES_DIR)/*.rules 2>/dev/null | wc -l | xargs -I {} echo "  {} rule files found"
 
 # ============================================================
 # 状态查看
@@ -498,6 +522,11 @@ list:
 	@if command -v suricata >/dev/null 2>&1; then \
 		VERSION=$$(suricata -V 2>&1 | head -1 | cut -d' ' -f5); \
 		printf '║  ✓ 已安装: %-56s ║\n' "$$VERSION"; \
+		if systemctl is-active --quiet suricata 2>/dev/null; then \
+			echo "║  ● 状态: 运行中 (systemd)                                         ║"; \
+		else \
+			echo "║  ○ 状态: 已停止  (make up SERVICE=suricata)                        ║"; \
+		fi; \
 	else \
 		echo "║  ○ 未安装  (make build/install SERVICE=suricata)                ║"; \
 	fi
@@ -506,70 +535,23 @@ list:
 status: list
 
 # ============================================================
-# 测试命令
-# ============================================================
-
-test-api:
-	@echo "=== Running Cloud API Tests ==="
-	@chmod +x fixtures/test_api.sh
-	@./fixtures/test_api.sh $(CLOUD_URL)
-
-test-probe:
-	@echo "=== Running Probe Blackbox Tests ==="
-	@cd fixtures/probe_blackbox_tests && python3 run_tests.py --quick \
-		--manager-host 127.0.0.1 --manager-port $(PROBE_PORT) \
-		--cloud-url $(CLOUD_URL)
-
-test-nids:
-	@echo "=== Running NIDS Probe Blackbox Tests ==="
-	@chmod +x fixtures/nids_tests/*.sh fixtures/nids_tests/*.py
-	@cd fixtures/nids_tests && ./run_all_tests.sh 127.0.0.1 $(PROBE_PORT)
-
-test-nids-quick:
-	@echo "=== Running NIDS Quick Tests ==="
-	@chmod +x fixtures/nids_tests/*.py
-	@cd fixtures/nids_tests && python3 run_nids_tests.py --quick --manager-port $(PROBE_PORT)
-
-test-nids-manager:
-	@echo "=== Running NIDS Manager Communication Tests ==="
-	@chmod +x fixtures/nids_tests/*.py
-	@cd fixtures/nids_tests && python3 test_manager_comm.py --port $(PROBE_PORT)
-
-test-stress:
-	@echo "=== Running Probe Stress Tests ==="
-	@cd fixtures/probe_blackbox_tests && python3 run_tests.py --stress \
-		--manager-host 127.0.0.1 --manager-port $(PROBE_PORT) \
-		--cloud-url $(CLOUD_URL)
-
-test-all: test-api test-probe test-nids-quick
-
-# ============================================================
-# 规则下载
-# ============================================================
-
-download-rules:
-	@echo "=== Downloading ET Open Rules ==="
-	@chmod +x scripts/download-et-rules.sh
-	@./scripts/download-et-rules.sh
-
-# ============================================================
 # 帮助
 # ============================================================
 
 help:
 	@echo "AI-IDPS 项目管理命令"
 	@echo ""
-	@echo "统一服务管理:"
+	@echo "服务管理:"
 	@echo "  make build [SERVICE=xxx]      构建服务"
 	@echo "  make rebuild [SERVICE=xxx]    完全重新构建"
 	@echo "  make up [SERVICE=xxx]         启动服务(后台)"
 	@echo "  make down [SERVICE=xxx]       停止服务"
 	@echo "  make restart [SERVICE=xxx]    重启服务"
 	@echo "  make logs [SERVICE=xxx]       查看服务日志"
-	@echo "  make run [SERVICE=xxx]        前台运行(调试)"
 	@echo "  make clean [SERVICE=xxx]      清理构建产物"
 	@echo "  make install [SERVICE=xxx]    安装到系统"
 	@echo "  make uninstall [SERVICE=xxx]  从系统卸载"
+	@echo "  make download-rules           下载 Suricata 规则"
 	@echo "  make list                     查看所有服务状态"
 	@echo ""
 	@echo "SERVICE 可选值:"
@@ -585,27 +567,16 @@ help:
 	@echo "  probes         所有探针 (Manager + NIDS)"
 	@echo "  suricata       Suricata 检测引擎"
 	@echo ""
-	@echo "测试:"
-	@echo "  make test-api          运行云端 API 测试"
-	@echo "  make test-probe        运行探针黑盒测试"
-	@echo "  make test-nids         运行 NIDS 探针完整测试"
-	@echo "  make test-nids-quick   运行 NIDS 探针快速测试"
-	@echo "  make test-nids-manager 运行 NIDS-Manager 通信测试"
-	@echo "  make test-stress       运行压力测试"
-	@echo "  make test-all          运行所有测试"
-	@echo ""
-	@echo "其他:"
-	@echo "  make download-rules  下载 ET Open 规则"
-	@echo "  make help            显示此帮助"
-	@echo ""
 	@echo "配置变量:"
 	@echo "  PROBE_PORT=$(PROBE_PORT)           Probe Manager 端口"
 	@echo "  CLOUD_URL=$(CLOUD_URL)   云端 API 地址"
 	@echo "  NIDS_INTERFACE=$(NIDS_INTERFACE)        NIDS 监控网卡"
 	@echo ""
 	@echo "示例:"
+	@echo "  make build                          构建所有云端服务"
 	@echo "  make build SERVICE=probes           构建所有探针"
+	@echo "  make up                             启动所有云端服务"
 	@echo "  make up SERVICE=probe-manager       启动 Probe Manager"
-	@echo "  make logs SERVICE=nids-probe        查看 NIDS Probe 日志"
-	@echo "  make install SERVICE=probes         安装所有探针到系统"
-	@echo "  PROBE_PORT=9002 make up SERVICE=probe-manager  指定端口启动"
+	@echo "  make logs SERVICE=backend           查看后端日志"
+	@echo "  make list                           查看所有服务状态"
+	@echo "  make install SERVICE=suricata       安装 Suricata"

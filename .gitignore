@@ -35,3 +35,8 @@ probe/**/Makefile
 *.swp
 *.swo
 .DS_Store
+
+# Downloaded rule files (download at deployment time)
+rules/emerging-all.rules
+rules/*.rules
+!rules/et-open/*.rules

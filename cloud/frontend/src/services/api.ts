@@ -2,7 +2,8 @@ import axios from 'axios'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const envApiUrl = (import.meta as any).env?.VITE_API_URL ?? ''
-const baseUrl = `${envApiUrl}/api/v1`
+// VITE_API_URL 应该是 '' 或完整的 API 前缀如 '/api/v1'
+const baseUrl = envApiUrl ? `${envApiUrl}/v1` : '/api/v1'
 
 export const apiClient = axios.create({
   baseURL: baseUrl,
