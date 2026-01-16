@@ -33,6 +33,9 @@ ai-idps/
 │   ├── 0001-spec.md          # 系统设计文档
 │   └── 0002-implementation-plan.md  # 实现计划
 ├── scripts/                  # 脚本工具
+├── fixtures/                 # 测试用例
+│   ├── test.rest             # API 测试用例文档
+│   └── test_api.sh           # 自动化测试脚本
 └── Makefile                  # 项目管理命令
 ```
 
@@ -102,6 +105,18 @@ make logs SERVICE=backend     # 查看后端日志
 # 查看服务状态
 make list                     # 查看所有服务状态
 ```
+
+### API 测试
+
+```bash
+# 运行自动化测试脚本
+./fixtures/test_api.sh
+
+# 或指定服务地址
+./fixtures/test_api.sh http://localhost:8080
+```
+
+测试脚本会自动测试所有 API 接口并输出结果。
 
 ## API 接口
 
