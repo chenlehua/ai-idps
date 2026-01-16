@@ -32,7 +32,7 @@ from probe_simulator import (
 
 # 测试配置
 MANAGER_HOST = "127.0.0.1"
-MANAGER_PORT = 9000
+MANAGER_PORT = 9010
 CONNECTION_TIMEOUT = 5.0
 
 

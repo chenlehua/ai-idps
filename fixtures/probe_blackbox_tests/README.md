@@ -52,7 +52,7 @@ python run_tests.py --quick
 ```bash
 python run_tests.py \
     --manager-host 192.168.1.100 \
-    --manager-port 9000 \
+    --manager-port 9010 \
     --cloud-url http://192.168.1.100
 ```
 
@@ -163,7 +163,7 @@ from probe_simulator import SmartProbeSimulator, ProbeInfo
 probe = SmartProbeSimulator(
     probe_info=ProbeInfo(probe_id="my-probe-001"),
     manager_host="127.0.0.1",
-    manager_port=9000
+    manager_port=9010
 )
 
 if probe.connect():

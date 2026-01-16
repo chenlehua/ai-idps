@@ -151,7 +151,7 @@ make -j$(nproc)
 export PROBE_ID=probe-001
 export PROBE_NAME="Production Probe"
 export CLOUD_URL=http://cloud-server/api/v1/probe
-export LISTEN_PORT=9000
+export LISTEN_PORT=9010
 ./probe-manager
 ```
 
@@ -166,7 +166,7 @@ export LISTEN_PORT=9000
     "probe_ip": "192.168.1.100",
     "probe_types": ["nids"],
     "cloud_url": "http://localhost/api/v1/probe",
-    "listen_port": 9000,
+    "listen_port": 9010,
     "rules_dir": "/var/lib/nids/rules",
     "heartbeat_interval": 300,
     "log_batch_size": 100,
@@ -182,7 +182,7 @@ export LISTEN_PORT=9000
 | `PROBE_NAME` | `default-probe` | 探针名称 |
 | `PROBE_IP` | `127.0.0.1` | 探针 IP 地址 |
 | `CLOUD_URL` | `http://localhost:8000/api/v1/probe` | 云端 API 地址 |
-| `LISTEN_PORT` | `9000` | 监听端口 (探针连接) |
+| `LISTEN_PORT` | `9010` | 监听端口 (探针连接) |
 | `RULES_DIR` | `/var/lib/nids/rules` | 规则文件目录 |
 | `HEARTBEAT_INTERVAL` | `300` | 心跳间隔 (秒) |
 

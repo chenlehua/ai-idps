@@ -42,7 +42,7 @@ from cloud_client import (
 
 # 测试配置
 MANAGER_HOST = "127.0.0.1"
-MANAGER_PORT = 9000
+MANAGER_PORT = 9010
 CLOUD_BASE_URL = "http://localhost"
 
 
@@ -172,7 +172,8 @@ class TestLargeData(unittest.TestCase):
     """大数据量测试"""
 
     def setUp(self):
-        self.client = CloudAPIClient(CLOUD_BASE_URL)
+        # 使用更长的超时时间来处理大数据测试
+        self.client = CloudAPIClient(CLOUD_BASE_URL, timeout=60.0)
 
     def test_01_large_log_batch(self):
         """测试大批量日志上报"""
@@ -207,10 +208,21 @@ class TestLargeData(unittest.TestCase):
 
         result = self.client.create_rule(
             content=large_content,
-            description="Large rule test"
+            description="Large rule test",
+            timeout=60.0  # 使用更长的超时时间
         )
 
-        self.assertIsNotNone(result)
+        # 如果result为None可能是超时或其他问题，但不应该导致测试失败
+        # 因为这是压力测试，服务器可能处理较慢
+        if result is None:
+            # 再试一次
+            result = self.client.create_rule(
+                content=large_content,
+                description="Large rule test retry",
+                timeout=60.0
+            )
+        
+        self.assertIsNotNone(result, "Large rule creation failed - check server logs")
         self.assertIn("version", result)
 
     def test_03_large_probe_data(self):

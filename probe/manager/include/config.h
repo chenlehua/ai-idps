@@ -10,7 +10,7 @@ struct Config {
     std::vector<std::string> probe_types = {"nids"};
 
     std::string cloud_url = "http://localhost:8000/api/v1/probe";
-    int listen_port = 9000;
+    int listen_port = 9010;
     std::string rules_dir = "/var/lib/nids/rules";
 
     int heartbeat_interval = 300;

@@ -244,16 +244,19 @@ class CloudAPIClient:
         except:
             return None
 
-    def create_rule(self, content: str, description: str = "") -> Optional[dict]:
+    def create_rule(self, content: str, description: str = "", timeout: Optional[float] = None) -> Optional[dict]:
         """创建新规则版本"""
         try:
+            # 对于大规则使用更长的超时时间
+            request_timeout = timeout or max(self.timeout, 30.0)
             response = self.session.post(
                 f"{self.base_url}/api/v1/rules",
                 json={"content": content, "description": description},
-                timeout=self.timeout
+                timeout=request_timeout
             )
             return response.json() if response.status_code == 200 else None
-        except:
+        except Exception as e:
+            logger.warning(f"Create rule failed: {e}")
             return None
 
     def get_rule_by_version(self, version: str) -> Optional[dict]:

@@ -79,7 +79,7 @@ class ProbeSimulator:
         self,
         probe_info: ProbeInfo,
         manager_host: str = "127.0.0.1",
-        manager_port: int = 9000
+        manager_port: int = 9010
     ):
         self.probe_info = probe_info
         self.manager_host = manager_host
@@ -407,7 +407,7 @@ if __name__ == "__main__":
     probe = SmartProbeSimulator(
         probe_info=ProbeInfo(probe_id="test-probe-001"),
         manager_host="127.0.0.1",
-        manager_port=9000
+        manager_port=9010
     )
 
     if probe.connect():

@@ -22,10 +22,10 @@ Phase 3 Black Box Test Runner
     python run_tests.py --quick
 
     # 指定服务器地址
-    python run_tests.py --manager-host 192.168.1.100 --manager-port 9000 --cloud-url http://192.168.1.100
+    python run_tests.py --manager-host 192.168.1.100 --manager-port 9010 --cloud-url http://192.168.1.100
 
 配置:
-    默认 Manager 地址: 127.0.0.1:9000
+    默认 Manager 地址: 127.0.0.1:9010
     默认 Cloud 地址: http://localhost
 """
 
@@ -171,8 +171,8 @@ def main():
     # 服务器配置
     parser.add_argument("--manager-host", default="127.0.0.1",
                        help="Probe Manager host (default: 127.0.0.1)")
-    parser.add_argument("--manager-port", type=int, default=9000,
-                       help="Probe Manager port (default: 9000)")
+    parser.add_argument("--manager-port", type=int, default=9010,
+                       help="Probe Manager port (default: 9010)")
     parser.add_argument("--cloud-url", default="http://localhost",
                        help="Cloud API URL (default: http://localhost)")
 

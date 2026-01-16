@@ -1,0 +1,25 @@
+[Unit]
+Description=AI-IDPS Probe Manager
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=LISTEN_PORT=9010
+Environment=CLOUD_URL=http://localhost
+ExecStart=/usr/local/bin/probe-manager
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=probe-manager
+
+# 安全设置
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp /var/log
+
+[Install]
+WantedBy=multi-user.target

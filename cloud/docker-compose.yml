@@ -1,8 +1,7 @@
 services:
   nginx:
     image: nginx:alpine
-    ports:
-      - "80:80"
+    network_mode: host
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -13,23 +12,22 @@ services:
 
   frontend:
     build: ./frontend
-    expose:
-      - "3000"
+    network_mode: host
     environment:
       - VITE_API_URL=/api
+      - PORT=3000
 
   backend:
     build: ./backend
-    expose:
-      - "8000"
+    network_mode: host
     environment:
-      - REDIS_URL=redis://redis:6379
-      - MYSQL_HOST=mysql
+      - REDIS_URL=redis://127.0.0.1:6379
+      - MYSQL_HOST=127.0.0.1
       - MYSQL_PORT=3306
       - MYSQL_USER=root
       - MYSQL_PASSWORD=password
       - MYSQL_DATABASE=nids
-      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_HOST=127.0.0.1
       - CLICKHOUSE_PORT=8123
       - CLICKHOUSE_DATABASE=nids
     depends_on:
@@ -42,6 +40,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    network_mode: host
     volumes:
       - redis_data:/data
     healthcheck:
@@ -52,6 +51,7 @@ services:
 
   mysql:
     image: mysql:8.0
+    network_mode: host
     environment:
       - MYSQL_ROOT_PASSWORD=password
       - MYSQL_DATABASE=nids
@@ -59,13 +59,14 @@ services:
       - mysql_data:/var/lib/mysql
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppassword"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-ppassword"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
+    network_mode: host
     environment:
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
       - ALLOW_EMPTY_PASSWORD=yes
