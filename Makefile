@@ -9,7 +9,7 @@
 #   make logs SERVICE=backend   - 查看指定服务日志
 #   make list               - 查看所有服务状态
 
-COMPOSE_FILE := docker-compose.yml
+COMPOSE_FILE := cloud/docker-compose.yml
 DOCKER_COMPOSE := docker compose -f $(COMPOSE_FILE)
 
 # 可选的服务参数

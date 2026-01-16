@@ -29,8 +29,8 @@ build/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
-Makefile
-!cloud/Makefile
+probe/**/Makefile
+!Makefile
 
 *.swp
 *.swo
