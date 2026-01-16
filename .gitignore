@@ -30,6 +30,7 @@ cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 Makefile
+!cloud/Makefile
 
 *.swp
 *.swo
