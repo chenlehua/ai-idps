@@ -30,3 +30,10 @@
 探针管理程序和云端通过http协议通信，数据格式为json。
 
 按照这个想法，帮我生成详细的需求和设计文档，放在./specs/0001-spec.md 文件中, 输出为中文。
+
+
+# make
+
+请优化Makefile，将make probe-*系列命令集成到make build SERVICE=probe-manager系列命令，probe-manager支持以systemctl服务运行，支持make list查看状态。重构make list，当服务未启动、启动失败也支持查看状态;
+
+请编译启动相关服务，运行./fixtures下所有黑盒测试用例，尽最大努力修复相关缺陷。

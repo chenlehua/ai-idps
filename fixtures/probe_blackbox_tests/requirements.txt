@@ -1,0 +1,2 @@
+# Phase 3 Black Box Tests Dependencies
+requests>=2.28.0

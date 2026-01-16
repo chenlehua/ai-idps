@@ -75,7 +75,9 @@ json CloudClient::send_request(int cmd, const json& data) {
     std::string body = request.dump();
     LOG_DEBUG("Sending request to cloud: cmd=", cmd);
 
-    std::string response = http_post(base_url_, body);
+    // API endpoint: /api/v1/probe
+    std::string url = base_url_ + "/api/v1/probe";
+    std::string response = http_post(url, body);
 
     if (response.empty()) {
         json error_response;
