@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <regex>
 
 namespace logger {
 
@@ -22,11 +24,46 @@ inline std::string now() {
     return oss.str();
 }
 
-template <typename... Args>
-inline void log(const char* level, Args&&... args) {
+// Helper to convert argument to string
+template <typename T>
+inline std::string to_string_helper(const T& arg) {
     std::ostringstream oss;
-    (oss << ... << args);
-    std::cout << "[" << now() << "] [" << level << "] " << oss.str() << std::endl;
+    oss << arg;
+    return oss.str();
+}
+
+// Base case: no more arguments to replace
+inline std::string format_impl(const std::string& fmt) {
+    return fmt;
+}
+
+// Recursive case: replace first {} with first argument
+template <typename T, typename... Args>
+inline std::string format_impl(const std::string& fmt, const T& first, const Args&... rest) {
+    size_t pos = fmt.find("{}");
+    if (pos == std::string::npos) {
+        return fmt;
+    }
+    std::string result = fmt.substr(0, pos) + to_string_helper(first) + fmt.substr(pos + 2);
+    return format_impl(result, rest...);
+}
+
+// Format function supporting {} placeholders
+template <typename... Args>
+inline std::string format(const std::string& fmt, const Args&... args) {
+    return format_impl(fmt, args...);
+}
+
+// Log function with fmt-style formatting
+template <typename... Args>
+inline void log(const char* level, const std::string& fmt, const Args&... args) {
+    std::string msg = format(fmt, args...);
+    std::cout << "[" << now() << "] [" << level << "] " << msg << std::endl;
+}
+
+// Overload for single string argument (no formatting needed)
+inline void log(const char* level, const std::string& msg) {
+    std::cout << "[" << now() << "] [" << level << "] " << msg << std::endl;
 }
 
 }  // namespace logger

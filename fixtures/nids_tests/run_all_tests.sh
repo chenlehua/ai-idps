@@ -71,9 +71,12 @@ else
     NIDS_RUNNING=false
 fi
 
-# 检查 Suricata
-if pgrep -x "suricata" > /dev/null 2>&1; then
+# 检查 Suricata (使用 pgrep -f 来匹配进程参数，因为 Suricata 可能由其他进程启动)
+if pgrep -f "suricata" > /dev/null 2>&1; then
     echo -e "${GREEN}✓${NC} Suricata is running"
+    SURICATA_RUNNING=true
+elif pgrep -x "Suricata-Main" > /dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} Suricata is running (Suricata-Main)"
     SURICATA_RUNNING=true
 else
     echo -e "${YELLOW}!${NC} Suricata is not running"
@@ -102,6 +105,18 @@ if [ -f "$LOG_DIR/eve.json" ]; then
 else
     echo -e "${YELLOW}!${NC} eve.json not found at $LOG_DIR"
     EVE_EXISTS=false
+fi
+
+# 检查 Suricata 规则是否加载
+RULES_DIR="/var/lib/suricata/rules"
+RULES_COUNT=$(ls -1 "$RULES_DIR"/*.rules 2>/dev/null | wc -l)
+if [ "$RULES_COUNT" -gt 0 ]; then
+    echo -e "${GREEN}✓${NC} Suricata rules loaded ($RULES_COUNT rule files)"
+    RULES_LOADED=true
+else
+    echo -e "${RED}✗${NC} No Suricata rules found in $RULES_DIR"
+    echo -e "${YELLOW}  Run 'make download-rules' to download ET Open rules${NC}"
+    RULES_LOADED=false
 fi
 
 # 检查必要工具
@@ -184,10 +199,11 @@ echo "╚═══════════════════════�
 if [ "$EVE_EXISTS" = true ]; then
     echo ""
     echo "=== Alert Statistics ==="
-    TOTAL_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null || echo 0)
+    TOTAL_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null | tr -d '\n' || echo "0")
+    TOTAL_ALERTS=${TOTAL_ALERTS:-0}
     echo "Total alerts in eve.json: $TOTAL_ALERTS"
-    
-    if [ "$TOTAL_ALERTS" -gt 0 ]; then
+
+    if [ "$TOTAL_ALERTS" -gt 0 ] 2>/dev/null; then
         echo ""
         echo "Recent alerts (last 5):"
         tail -100 "$LOG_DIR/eve.json" 2>/dev/null | \

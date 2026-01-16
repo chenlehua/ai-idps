@@ -27,9 +27,22 @@ if [ "$EUID" -ne 0 ]; then
     echo "Consider running with sudo for full functionality"
 fi
 
-# 记录初始告警数
+# 检查 Suricata 规则
+RULES_DIR="/var/lib/suricata/rules"
+RULES_COUNT=$(ls -1 "$RULES_DIR"/*.rules 2>/dev/null | wc -l)
+if [ "$RULES_COUNT" -eq 0 ]; then
+    echo "WARNING: No Suricata rules found in $RULES_DIR"
+    echo "Run 'make download-rules' to download ET Open rules"
+    echo "Tests will run but may not generate alerts"
+    echo ""
+fi
+
+# 记录初始告警数（基线）
+BASELINE_ALERTS=0
 if [ -f "$LOG_DIR/eve.json" ]; then
-    INITIAL_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null || echo 0)
+    BASELINE_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null | tr -d '\n' || echo "0")
+    BASELINE_ALERTS=${BASELINE_ALERTS:-0}
+    INITIAL_ALERTS=$BASELINE_ALERTS
 else
     INITIAL_ALERTS=0
 fi
@@ -51,7 +64,8 @@ run_scan() {
     sleep 2
     
     if [ -f "$LOG_DIR/eve.json" ]; then
-        CURRENT_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null || echo 0)
+        CURRENT_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null | tr -d '\n' || echo "0")
+        CURRENT_ALERTS=${CURRENT_ALERTS:-0}
         NEW_ALERTS=$((CURRENT_ALERTS - INITIAL_ALERTS))
         echo "New alerts: $NEW_ALERTS"
         INITIAL_ALERTS=$CURRENT_ALERTS
@@ -87,10 +101,15 @@ run_scan "ACK Scan" -sA -p 22,80,443 $TARGET
 echo "=================================================="
 echo "  Test Summary"
 echo "=================================================="
+
+TOTAL_NEW_ALERTS=0
 if [ -f "$LOG_DIR/eve.json" ]; then
-    FINAL_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null || echo 0)
+    FINAL_ALERTS=$(grep -c '"event_type":"alert"' "$LOG_DIR/eve.json" 2>/dev/null | tr -d '\n' || echo "0")
+    FINAL_ALERTS=${FINAL_ALERTS:-0}
+    TOTAL_NEW_ALERTS=$((FINAL_ALERTS - BASELINE_ALERTS))
     echo "Total alerts in eve.json: $FINAL_ALERTS"
-    
+    echo "New alerts from this test: $TOTAL_NEW_ALERTS"
+
     echo ""
     echo "Recent scan-related alerts:"
     tail -100 "$LOG_DIR/eve.json" 2>/dev/null | grep '"event_type":"alert"' | \
@@ -100,3 +119,18 @@ else
     echo "eve.json not found at $LOG_DIR/eve.json"
 fi
 echo "=================================================="
+
+# 验证测试结果
+if [ "$RULES_COUNT" -eq 0 ]; then
+    echo ""
+    echo "RESULT: SKIP (no rules loaded)"
+    exit 0
+elif [ "$TOTAL_NEW_ALERTS" -eq 0 ]; then
+    echo ""
+    echo "RESULT: WARN (no alerts generated - check if Suricata is monitoring the right interface)"
+    exit 0
+else
+    echo ""
+    echo "RESULT: PASS ($TOTAL_NEW_ALERTS alerts detected)"
+    exit 0
+fi

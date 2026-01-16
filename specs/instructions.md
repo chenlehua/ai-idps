@@ -37,3 +37,13 @@
 请优化Makefile，将make probe-*系列命令集成到make build SERVICE=probe-manager系列命令，probe-manager支持以systemctl服务运行，支持make list查看状态。重构make list，当服务未启动、启动失败也支持查看状态;
 
 请编译启动相关服务，运行./fixtures下所有黑盒测试用例，尽最大努力修复相关缺陷。
+
+
+
+## phase 5
+
+请基于main分支进行开发，完成后提交至main分支，并推送到远程仓库main分支
+
+请继续完成 Phase 5: 云端前端实现 和 Phase 6: 集成测试与优化 的任务。
+先完成phase5，再进行phase6。
+每完成一个阶段，进行功能验证，并修复对应缺陷，提交和推送代码。
