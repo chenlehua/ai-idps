@@ -65,7 +65,7 @@ NIDS_SERVICE_TEMPLATE := scripts/nids-probe.service
 SERVICE ?=
 
 .PHONY: build rebuild up down restart logs clean install uninstall run \
-        list status test-api test-probe test-stress test-all help
+        list status test-api test-probe test-nids test-stress test-all help
 
 # ============================================================
 # 构建命令
@@ -520,13 +520,28 @@ test-probe:
 		--manager-host 127.0.0.1 --manager-port $(PROBE_PORT) \
 		--cloud-url $(CLOUD_URL)
 
+test-nids:
+	@echo "=== Running NIDS Probe Blackbox Tests ==="
+	@chmod +x fixtures/nids_tests/*.sh fixtures/nids_tests/*.py
+	@cd fixtures/nids_tests && ./run_all_tests.sh 127.0.0.1 $(PROBE_PORT)
+
+test-nids-quick:
+	@echo "=== Running NIDS Quick Tests ==="
+	@chmod +x fixtures/nids_tests/*.py
+	@cd fixtures/nids_tests && python3 run_nids_tests.py --quick --manager-port $(PROBE_PORT)
+
+test-nids-manager:
+	@echo "=== Running NIDS Manager Communication Tests ==="
+	@chmod +x fixtures/nids_tests/*.py
+	@cd fixtures/nids_tests && python3 test_manager_comm.py --port $(PROBE_PORT)
+
 test-stress:
 	@echo "=== Running Probe Stress Tests ==="
 	@cd fixtures/probe_blackbox_tests && python3 run_tests.py --stress \
 		--manager-host 127.0.0.1 --manager-port $(PROBE_PORT) \
 		--cloud-url $(CLOUD_URL)
 
-test-all: test-api test-probe
+test-all: test-api test-probe test-nids-quick
 
 # ============================================================
 # 规则下载
@@ -571,10 +586,13 @@ help:
 	@echo "  suricata       Suricata 检测引擎"
 	@echo ""
 	@echo "测试:"
-	@echo "  make test-api        运行云端 API 测试"
-	@echo "  make test-probe      运行探针黑盒测试"
-	@echo "  make test-stress     运行压力测试"
-	@echo "  make test-all        运行所有测试"
+	@echo "  make test-api          运行云端 API 测试"
+	@echo "  make test-probe        运行探针黑盒测试"
+	@echo "  make test-nids         运行 NIDS 探针完整测试"
+	@echo "  make test-nids-quick   运行 NIDS 探针快速测试"
+	@echo "  make test-nids-manager 运行 NIDS-Manager 通信测试"
+	@echo "  make test-stress       运行压力测试"
+	@echo "  make test-all          运行所有测试"
 	@echo ""
 	@echo "其他:"
 	@echo "  make download-rules  下载 ET Open 规则"

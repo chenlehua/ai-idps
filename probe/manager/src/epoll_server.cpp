@@ -194,22 +194,33 @@ void EpollServer::handle_read(int fd) {
     auto& conn = it->second;
 
     while (true) {
-        auto msg = conn->read_message();
-        if (!msg.has_value()) {
-            if (conn->is_closed()) {
-                LOG_INFO("Probe disconnected: fd=", fd);
-                if (disconnect_callback_) {
-                    disconnect_callback_(fd);
+        try {
+            auto msg = conn->read_message();
+            if (!msg.has_value()) {
+                if (conn->is_closed()) {
+                    LOG_INFO("Probe disconnected: fd=", fd);
+                    if (disconnect_callback_) {
+                        disconnect_callback_(fd);
+                    }
+                    remove_from_epoll(fd);
+                    connections_.erase(fd);
                 }
-                remove_from_epoll(fd);
-                connections_.erase(fd);
+                break;
             }
-            break;
-        }
 
-        // 处理消息
-        if (message_callback_) {
-            message_callback_(fd, msg.value());
+            // 处理消息
+            if (message_callback_) {
+                message_callback_(fd, msg.value());
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("Error handling message from fd=", fd, ": ", e.what());
+            // 关闭连接
+            if (disconnect_callback_) {
+                disconnect_callback_(fd);
+            }
+            remove_from_epoll(fd);
+            connections_.erase(fd);
+            break;
         }
     }
 }

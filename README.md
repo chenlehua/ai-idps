@@ -164,10 +164,62 @@ suricata -V
 ## 测试
 
 ```bash
-make test-api      # 运行云端 API 测试
-make test-probe    # 运行探针黑盒测试
-make test-stress   # 运行压力测试
-make test-all      # 运行所有测试
+# 云端测试
+make test-api            # 运行云端 API 测试
+
+# 探针测试
+make test-probe          # 运行探针黑盒测试
+make test-stress         # 运行压力测试
+
+# NIDS 探针测试
+make test-nids           # 运行 NIDS 完整测试套件
+make test-nids-quick     # 运行 NIDS 快速测试
+make test-nids-manager   # 运行 NIDS-Manager 通信测试
+
+# 所有测试
+make test-all            # 运行所有测试
+```
+
+### NIDS 探针黑盒测试
+
+NIDS 探针黑盒测试位于 `fixtures/nids_tests/` 目录，包含以下测试用例：
+
+| 测试脚本 | 说明 |
+|:---------|:-----|
+| `run_nids_tests.py` | Python 测试运行器 |
+| `test_manager_comm.py` | Manager 通信协议测试 |
+| `test_port_scan.sh` | 端口扫描检测测试 |
+| `test_web_attacks.sh` | Web 攻击检测测试 |
+| `test_protocol_anomaly.sh` | 协议异常检测测试 |
+| `test_malware_traffic.sh` | 恶意流量模拟测试 |
+| `test_stress.sh` | 压力测试 |
+
+#### 手动运行测试
+
+```bash
+# 进入测试目录
+cd fixtures/nids_tests
+
+# 运行所有测试
+./run_all_tests.sh <target_ip> <manager_port>
+
+# 运行单个测试
+./test_port_scan.sh <target_ip>
+./test_web_attacks.sh http://<target_ip>
+python3 test_manager_comm.py --port 9010
+
+# Python 测试
+python3 run_nids_tests.py --target <target_ip> --manager-port 9010
+```
+
+#### 测试依赖
+
+```bash
+# 基础工具
+sudo apt-get install -y nmap netcat curl
+
+# 高级测试工具（可选）
+sudo apt-get install -y hping3 nikto hydra
 ```
 
 ## Probe Manager

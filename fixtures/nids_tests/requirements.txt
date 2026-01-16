@@ -1,0 +1,11 @@
+# NIDS 探针黑盒测试依赖
+
+# 核心依赖 (Python 标准库即可满足大部分需求)
+# - socket
+# - json
+# - struct
+# - subprocess
+
+# 可选依赖 (高级功能)
+scapy>=2.4.0        # 自定义数据包构造
+requests>=2.25.0    # HTTP 客户端

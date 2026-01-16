@@ -87,6 +87,11 @@ std::optional<json> ProbeConnection::read_message() {
         // 移除已处理的数据
         read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + total_len);
         return std::nullopt;
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error parsing message: ", e.what());
+        // 移除已处理的数据
+        read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + total_len);
+        return std::nullopt;
     }
 }
 
