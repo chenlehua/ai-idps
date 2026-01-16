@@ -8,165 +8,178 @@
 ai-idps/
 ├── cloud/                    # 云端服务
 │   ├── backend/              # FastAPI 后端
-│   │   ├── app/
-│   │   │   ├── main.py       # 应用入口
-│   │   │   ├── config.py     # 配置管理
-│   │   │   ├── models/       # 数据模型
-│   │   │   ├── routers/      # API 路由
-│   │   │   └── services/     # 业务服务
-│   │   ├── Dockerfile
-│   │   └── pyproject.toml
 │   ├── frontend/             # React 前端
 │   ├── nginx/                # Nginx 配置
 │   ├── mysql/                # MySQL 初始化脚本
 │   ├── clickhouse/           # ClickHouse 初始化脚本
-│   ├── docker-compose.yml
-│   └── Makefile              # Docker 管理命令
+│   └── docker-compose.yml
 ├── probe/                    # 探针端
 │   ├── common/               # 公共库
 │   ├── manager/              # Probe Manager
 │   └── nids/                 # NIDS 探针
-├── rules/                    # 规则集目录
-│   └── et-open/              # ET Open 规则
 ├── third_party/              # 第三方依赖
 │   └── suricata/             # Suricata 子模块
-├── specs/                    # 需求与实现计划
-│   ├── 0001-spec.md          # 系统设计文档
-│   └── 0002-implementation-plan.md  # 实现计划
+├── rules/                    # 规则集目录
 ├── scripts/                  # 脚本工具
 ├── fixtures/                 # 测试用例
-│   ├── test.rest             # API 测试用例文档
-│   └── test_api.sh           # 自动化测试脚本
-└── Makefile                  # 项目管理命令
+├── specs/                    # 需求与设计文档
+└── Makefile                  # 项目统一管理命令
 ```
 
 ## 快速开始
 
 ### 前置要求
 
-- Docker >= 24.0
-- Docker Compose >= 2.20
-- Make
+- Docker >= 24.0 (云端服务)
+- Docker Compose >= 2.20 (云端服务)
+- CMake >= 3.16 (探针)
+- GCC >= 11 (探针)
+- libcurl-dev (探针)
+
+### 查看所有服务状态
+
+```bash
+make list
+```
 
 ### 启动云端服务
 
-1. **构建并启动所有服务**
-
 ```bash
-# 方式一：使用 Makefile（推荐）
-make build    # 构建所有服务
-make up       # 启动所有服务
+make build                    # 构建云端服务
+make up                       # 启动云端服务
 
-# 方式二：直接使用 docker compose
-docker compose -f cloud/docker-compose.yml up --build -d
+# 验证
+curl http://localhost/health  # 返回: {"status":"ok"}
 ```
 
-2. **验证服务状态**
+### 构建并启动探针
 
 ```bash
-# 查看所有服务状态
+# 构建所有探针
+make build SERVICE=probes
+
+# 启动 Probe Manager
+make up SERVICE=probe-manager
+
+# 启动 NIDS Probe
+make up SERVICE=nids-probe
+
+# 查看状态
 make list
-
-# 访问健康检查
-curl http://localhost/health
-# 返回: {"status":"ok"}
 ```
 
-3. **访问服务**
+## 统一服务管理命令
 
-- 前端界面: http://localhost/
-- API 文档: http://localhost/docs (FastAPI Swagger UI)
-- 健康检查: http://localhost/health
+所有服务（云端和探针）使用统一的 `make` 命令管理：
 
-### 服务管理命令
+| 命令 | 说明 |
+|:-----|:-----|
+| `make build [SERVICE=xxx]` | 构建服务 |
+| `make rebuild [SERVICE=xxx]` | 完全重新构建 |
+| `make up [SERVICE=xxx]` | 启动服务（后台） |
+| `make down [SERVICE=xxx]` | 停止服务 |
+| `make restart [SERVICE=xxx]` | 重启服务 |
+| `make logs [SERVICE=xxx]` | 查看服务日志 |
+| `make run [SERVICE=xxx]` | 前台运行（调试） |
+| `make clean [SERVICE=xxx]` | 清理构建产物 |
+| `make install [SERVICE=xxx]` | 安装到系统 |
+| `make uninstall [SERVICE=xxx]` | 从系统卸载 |
+| `make list` | 查看所有服务状态 |
+| `make help` | 显示帮助信息 |
+
+### SERVICE 可选值
+
+| 值 | 说明 |
+|:---|:-----|
+| (不指定) | 操作所有云端 Docker 服务 |
+| `backend` | 云端后端服务 |
+| `frontend` | 云端前端服务 |
+| `nginx` | Nginx 代理 |
+| `redis` | Redis 服务 |
+| `mysql` | MySQL 服务 |
+| `clickhouse` | ClickHouse 服务 |
+| `probe-manager` | Probe Manager |
+| `nids-probe` | NIDS Probe |
+| `probes` | 所有探针 (Manager + NIDS) |
+| `suricata` | Suricata 检测引擎 |
+
+### 使用示例
 
 ```bash
-# 构建服务
-make build                    # 构建所有服务
-make build SERVICE=backend    # 只构建后端
+# 构建所有探针
+make build SERVICE=probes
 
-# 重新构建（无缓存）
-make rebuild                  # 重新构建所有服务
-make rebuild SERVICE=frontend # 重新构建前端
+# 只构建 Probe Manager
+make build SERVICE=probe-manager
 
-# 启动/停止服务
-make up                       # 启动所有服务
-make up SERVICE=backend       # 只启动后端
-make down                     # 停止所有服务
-make down SERVICE=mysql       # 停止 MySQL
+# 启动 Probe Manager（后台）
+make up SERVICE=probe-manager
 
-# 重启服务
-make restart                  # 重启所有服务
-make restart SERVICE=backend  # 重启后端
+# 前台运行 NIDS Probe（调试）
+make run SERVICE=nids-probe
 
-# 查看日志
-make logs                     # 查看所有服务日志
-make logs SERVICE=backend     # 查看后端日志
+# 查看 Probe Manager 日志
+make logs SERVICE=probe-manager
 
-# 查看服务状态
-make list                     # 查看所有服务状态
+# 停止所有探针
+make down SERVICE=probes
+
+# 安装探针到系统
+make install SERVICE=probes
+
+# 使用自定义端口启动
+PROBE_PORT=9020 make up SERVICE=probe-manager
+
+# 指定监控网卡
+NIDS_INTERFACE=ens33 make up SERVICE=nids-probe
 ```
 
-### API 测试
+## 编译 Suricata
+
+如果系统未安装 Suricata，可以从源码编译：
 
 ```bash
-# 运行自动化测试脚本
-./fixtures/test_api.sh
+# 初始化 Suricata 子模块
+git submodule update --init --recursive
 
-# 或指定服务地址
-./fixtures/test_api.sh http://localhost:8080
+# 编译 Suricata
+make build SERVICE=suricata
+
+# 安装 Suricata
+make install SERVICE=suricata
+
+# 验证安装
+suricata -V
 ```
 
-测试脚本会自动测试所有 API 接口并输出结果。
+## 配置变量
 
-## 编译探针
+| 变量 | 默认值 | 说明 |
+|:-----|:-------|:-----|
+| `PROBE_PORT` | `9010` | Probe Manager 监听端口 |
+| `CLOUD_URL` | `http://localhost` | 云端 API 地址 |
+| `NIDS_INTERFACE` | `eth0` | NIDS 监控网卡 |
+| `SURICATA_CONFIG` | `/etc/suricata/suricata.yaml` | Suricata 配置文件 |
 
-### 前置要求
-
-- CMake >= 3.16
-- GCC >= 11 或 Clang >= 14 (支持 C++17)
-- libcurl-dev (Probe Manager)
-- Suricata (NIDS Probe)
-
-### 编译步骤
+## 测试
 
 ```bash
-# 安装依赖 (Ubuntu/Debian)
-sudo apt-get install -y cmake g++ libcurl4-openssl-dev
-
-# 使用 Makefile（推荐）
-make build SERVICE=probes        # 构建所有探针
-make build SERVICE=probe-manager # 只构建 Probe Manager
-make build SERVICE=nids-probe    # 只构建 NIDS Probe
-
-# 或手动编译
-cd probe
-mkdir -p build && cd build
-CXX=g++ cmake ..
-make -j$(nproc)
-
-# 可执行文件位于:
-#   build/manager/probe-manager
-#   build/nids/nids-probe
+make test-api      # 运行云端 API 测试
+make test-probe    # 运行探针黑盒测试
+make test-stress   # 运行压力测试
+make test-all      # 运行所有测试
 ```
 
-### 运行 Probe Manager
+## Probe Manager
 
-```bash
-# 使用配置文件
-./probe-manager /path/to/config.json
+Probe Manager 是探针管理程序，负责：
+- 与云端通信（注册、心跳、规则同步、日志上报）
+- 管理多个探针实例
+- 日志聚合和批量上报
 
-# 或使用环境变量
-export PROBE_ID=probe-001
-export PROBE_NAME="Production Probe"
-export CLOUD_URL=http://cloud-server/api/v1/probe
-export LISTEN_PORT=9010
-./probe-manager
-```
+### 配置文件
 
-### 配置文件示例
-
-参考 `probe/manager/config.example.json`:
+参考 `probe/manager/config.example.json`：
 
 ```json
 {
@@ -177,70 +190,40 @@ export LISTEN_PORT=9010
     "cloud_url": "http://localhost/api/v1/probe",
     "listen_port": 9010,
     "rules_dir": "/var/lib/nids/rules",
-    "heartbeat_interval": 300,
-    "log_batch_size": 100,
-    "log_flush_interval": 10
+    "heartbeat_interval": 300
 }
 ```
 
-### Probe Manager 环境变量
+### 环境变量
 
 | 变量 | 默认值 | 说明 |
 |:-----|:-------|:-----|
 | `PROBE_ID` | `probe-001` | 探针节点 ID |
 | `PROBE_NAME` | `default-probe` | 探针名称 |
-| `PROBE_IP` | `127.0.0.1` | 探针 IP 地址 |
 | `CLOUD_URL` | `http://localhost:8000/api/v1/probe` | 云端 API 地址 |
-| `LISTEN_PORT` | `9010` | 监听端口 (探针连接) |
+| `LISTEN_PORT` | `9010` | 监听端口 |
 | `RULES_DIR` | `/var/lib/nids/rules` | 规则文件目录 |
 | `HEARTBEAT_INTERVAL` | `300` | 心跳间隔 (秒) |
 
-## 运行 NIDS Probe
+## NIDS Probe
 
-NIDS 探针需要与 Probe Manager 配合使用，负责调用 Suricata 进行网络流量检测。
+NIDS 探针负责网络入侵检测，通过调用 Suricata 进行流量分析。
 
-### 前置要求
-
-- Suricata >= 7.0 已安装
-- 网络接口具有抓包权限
-
-### 运行方式
-
-```bash
-# 使用 Makefile
-make nids-run                     # 前台运行（调试用）
-make nids-up                      # 后台运行
-make nids-down                    # 停止
-make nids-logs                    # 查看日志
-
-# 或直接运行
-./nids-probe \
-    --manager 127.0.0.1:9010 \
-    --interface eth0 \
-    --config /etc/suricata/suricata.yaml
-
-# 使用环境变量
-export MANAGER_HOST=127.0.0.1
-export MANAGER_PORT=9010
-export INTERFACE=eth0
-./nids-probe
-```
-
-### NIDS Probe 命令行选项
+### 命令行选项
 
 ```
 Options:
   -m, --manager <host:port>  Manager 地址 (默认: 127.0.0.1:9000)
   -i, --interface <name>     监控网卡 (默认: eth0)
-  -c, --config <path>        Suricata 配置文件 (默认: /etc/suricata/suricata.yaml)
-  -r, --rules <path>         规则文件路径 (可选)
-  -l, --log-dir <path>       Suricata 日志目录 (默认: /var/log/suricata)
-  -p, --probe-id <id>        探针 ID (默认: 自动生成)
+  -c, --config <path>        Suricata 配置文件
+  -r, --rules <path>         规则文件路径
+  -l, --log-dir <path>       日志目录
+  -p, --probe-id <id>        探针 ID
   -h, --help                 显示帮助
   -v, --version              显示版本
 ```
 
-### NIDS Probe 环境变量
+### 环境变量
 
 | 变量 | 默认值 | 说明 |
 |:-----|:-------|:-----|
@@ -248,9 +231,7 @@ Options:
 | `MANAGER_PORT` | `9000` | Probe Manager 端口 |
 | `INTERFACE` | `eth0` | 监控网卡 |
 | `SURICATA_CONFIG` | `/etc/suricata/suricata.yaml` | Suricata 配置文件 |
-| `RULES_PATH` | | 规则文件路径 |
 | `LOG_DIR` | `/var/log/suricata` | 日志目录 |
-| `PROBE_ID` | | 探针 ID |
 
 ## API 接口
 
@@ -270,66 +251,22 @@ Options:
 | 接口 | 方法 | 说明 |
 |:-----|:-----|:-----|
 | `/api/v1/probes` | GET | 获取探针列表 |
-| `/api/v1/probes/{probe_id}` | GET | 获取探针详情 |
-| `/api/v1/rules` | GET | 获取规则列表 |
-| `/api/v1/rules` | POST | 创建新规则版本 |
-| `/api/v1/rules/{version}` | GET | 获取指定版本规则 |
+| `/api/v1/rules` | GET/POST | 规则管理 |
 | `/api/v1/logs` | GET | 查询告警日志 |
-| `/api/v1/logs/stats` | GET | 日志统计分析 |
+| `/api/v1/logs/stats` | GET | 日志统计 |
 
 ### WebSocket 接口
 
 - 实时日志: `ws://localhost/api/v1/ws/logs`
-
-```javascript
-// 订阅日志
-ws.send(JSON.stringify({
-  action: "subscribe",
-  filters: {
-    probe_id: "probe-001",   // 可选
-    severity: [1, 2],        // 可选
-    probe_type: "nids"       // 可选
-  }
-}));
-
-// 接收日志
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if (data.event === "log") {
-    console.log("收到日志:", data.data);
-  }
-};
-```
 
 ## 开发进度
 
 ### 已完成
 
 - [x] **Phase 1**: 环境搭建与基础框架
-  - Docker Compose 配置
-  - 后端 FastAPI 框架
-  - 前端 Vite + React 框架
-  - 数据库初始化脚本 (MySQL, ClickHouse)
-
 - [x] **Phase 2**: 云端后端核心功能
-  - 探针通信协议实现 (cmd + data)
-  - 规则管理 CRUD
-  - 日志接收和存储 (ClickHouse)
-  - WebSocket 实时推送
-  - Redis 缓存层
-
 - [x] **Phase 3**: 探针管理程序 (Probe Manager)
-  - 基于 epoll 的高性能事件循环
-  - 与云端的 HTTP 通信 (libcurl)
-  - 与探针的 TCP Socket 通信
-  - 规则下载和分发
-  - 日志聚合和批量上报
-
 - [x] **Phase 4**: NIDS 探针实现
-  - Suricata 进程管理 (fork/exec)
-  - eve.json 日志实时解析 (inotify)
-  - SIGUSR2 规则热更新
-  - 与 Probe Manager 的 TCP Socket 通信
 
 ### 待完成
 
@@ -340,33 +277,11 @@ ws.onmessage = (event) => {
 
 | 组件 | 技术 |
 |:-----|:-----|
-| 云端后端 | Python 3.11 / FastAPI / UV |
-| 云端前端 | TypeScript / Vite / React / TailwindCSS |
-| 缓存 | Redis 7 |
-| 元数据库 | MySQL 8.0 |
-| 日志存储 | ClickHouse |
-| 反向代理 | Nginx |
-| 容器化 | Docker / Docker Compose |
-| 探针端 | C++ / CMake / epoll |
+| 云端后端 | Python 3.11 / FastAPI |
+| 云端前端 | TypeScript / Vite / React |
+| 数据库 | Redis / MySQL / ClickHouse |
+| 探针端 | C++17 / CMake / epoll |
 | NIDS 引擎 | Suricata (GPL) |
-
-## 配置说明
-
-### 环境变量
-
-后端服务支持以下环境变量配置：
-
-| 变量 | 默认值 | 说明 |
-|:-----|:-------|:-----|
-| `REDIS_URL` | `redis://localhost:6379` | Redis 连接地址 |
-| `MYSQL_HOST` | `localhost` | MySQL 主机 |
-| `MYSQL_PORT` | `3306` | MySQL 端口 |
-| `MYSQL_USER` | `root` | MySQL 用户 |
-| `MYSQL_PASSWORD` | `password` | MySQL 密码 |
-| `MYSQL_DATABASE` | `nids` | MySQL 数据库 |
-| `CLICKHOUSE_HOST` | `localhost` | ClickHouse 主机 |
-| `CLICKHOUSE_PORT` | `8123` | ClickHouse HTTP 端口 |
-| `CLICKHOUSE_DATABASE` | `nids` | ClickHouse 数据库 |
 
 ## 许可证
 
