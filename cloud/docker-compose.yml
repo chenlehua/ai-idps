@@ -66,6 +66,9 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
+    environment:
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - ALLOW_EMPTY_PASSWORD=yes
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

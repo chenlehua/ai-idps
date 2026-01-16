@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS rule_versions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     version VARCHAR(32) UNIQUE NOT NULL,
     content LONGTEXT NOT NULL,
-    checksum VARCHAR(64) NOT NULL,
+    checksum VARCHAR(128) NOT NULL,
     description TEXT,
     is_active BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
