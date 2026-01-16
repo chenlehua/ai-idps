@@ -118,6 +118,74 @@ make list                     # 查看所有服务状态
 
 测试脚本会自动测试所有 API 接口并输出结果。
 
+## 编译 Probe Manager
+
+### 前置要求
+
+- CMake >= 3.16
+- GCC >= 11 或 Clang >= 14 (支持 C++17)
+- libcurl-dev
+
+### 编译步骤
+
+```bash
+# 安装依赖 (Ubuntu/Debian)
+sudo apt-get install -y cmake g++ libcurl4-openssl-dev
+
+# 编译
+cd probe
+mkdir -p build && cd build
+cmake ..
+make -j$(nproc)
+
+# 可执行文件位于 build/manager/probe-manager
+```
+
+### 运行 Probe Manager
+
+```bash
+# 使用配置文件
+./probe-manager /path/to/config.json
+
+# 或使用环境变量
+export PROBE_ID=probe-001
+export PROBE_NAME="Production Probe"
+export CLOUD_URL=http://cloud-server/api/v1/probe
+export LISTEN_PORT=9000
+./probe-manager
+```
+
+### 配置文件示例
+
+参考 `probe/manager/config.example.json`:
+
+```json
+{
+    "probe_id": "probe-001",
+    "probe_name": "Production Probe 1",
+    "probe_ip": "192.168.1.100",
+    "probe_types": ["nids"],
+    "cloud_url": "http://localhost/api/v1/probe",
+    "listen_port": 9000,
+    "rules_dir": "/var/lib/nids/rules",
+    "heartbeat_interval": 300,
+    "log_batch_size": 100,
+    "log_flush_interval": 10
+}
+```
+
+### Probe Manager 环境变量
+
+| 变量 | 默认值 | 说明 |
+|:-----|:-------|:-----|
+| `PROBE_ID` | `probe-001` | 探针节点 ID |
+| `PROBE_NAME` | `default-probe` | 探针名称 |
+| `PROBE_IP` | `127.0.0.1` | 探针 IP 地址 |
+| `CLOUD_URL` | `http://localhost:8000/api/v1/probe` | 云端 API 地址 |
+| `LISTEN_PORT` | `9000` | 监听端口 (探针连接) |
+| `RULES_DIR` | `/var/lib/nids/rules` | 规则文件目录 |
+| `HEARTBEAT_INTERVAL` | `300` | 心跳间隔 (秒) |
+
 ## API 接口
 
 ### 探针通信接口
@@ -184,9 +252,15 @@ ws.onmessage = (event) => {
   - WebSocket 实时推送
   - Redis 缓存层
 
+- [x] **Phase 3**: 探针管理程序 (Probe Manager)
+  - 基于 epoll 的高性能事件循环
+  - 与云端的 HTTP 通信 (libcurl)
+  - 与探针的 TCP Socket 通信
+  - 规则下载和分发
+  - 日志聚合和批量上报
+
 ### 待完成
 
-- [ ] **Phase 3**: 探针管理程序 (Probe Manager)
 - [ ] **Phase 4**: NIDS 探针实现
 - [ ] **Phase 5**: 云端前端实现
 - [ ] **Phase 6**: 集成测试与优化
