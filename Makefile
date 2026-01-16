@@ -543,6 +543,20 @@ test-stress:
 
 test-all: test-api test-probe test-nids-quick
 
+test-integration:
+	@echo "=== Running Integration Tests ==="
+	@python3 scripts/integration_tests.py --base-url $(CLOUD_URL)
+
+test-performance:
+	@echo "=== Running Performance Tests ==="
+	@python3 scripts/performance_tests.py --base-url $(CLOUD_URL) \
+		--rate 100 --duration 30 --concurrency 20 --connections 50 --probes 5
+
+test-perf-full:
+	@echo "=== Running Full Performance Tests ==="
+	@python3 scripts/performance_tests.py --base-url $(CLOUD_URL) --all \
+		--rate 1000 --duration 60 --concurrency 50 --connections 100 --probes 10
+
 # ============================================================
 # 规则下载
 # ============================================================
@@ -592,6 +606,9 @@ help:
 	@echo "  make test-nids-quick   运行 NIDS 探针快速测试"
 	@echo "  make test-nids-manager 运行 NIDS-Manager 通信测试"
 	@echo "  make test-stress       运行压力测试"
+	@echo "  make test-integration  运行端到端集成测试"
+	@echo "  make test-performance  运行性能测试(快速)"
+	@echo "  make test-perf-full    运行完整性能测试"
 	@echo "  make test-all          运行所有测试"
 	@echo ""
 	@echo "其他:"

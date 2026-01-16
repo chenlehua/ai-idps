@@ -164,7 +164,7 @@ suricata -V
 ## 测试
 
 ```bash
-# 云端测试
+# 云端 API 测试
 make test-api            # 运行云端 API 测试
 
 # 探针测试
@@ -176,8 +176,56 @@ make test-nids           # 运行 NIDS 完整测试套件
 make test-nids-quick     # 运行 NIDS 快速测试
 make test-nids-manager   # 运行 NIDS-Manager 通信测试
 
+# 集成测试
+make test-integration    # 运行端到端集成测试
+
+# 性能测试
+make test-performance    # 运行性能测试(快速模式)
+make test-perf-full      # 运行完整性能测试
+
 # 所有测试
 make test-all            # 运行所有测试
+```
+
+### 集成测试
+
+集成测试 (`scripts/integration_tests.py`) 验证以下场景：
+- 健康检查
+- 探针注册、心跳、详情获取
+- 规则创建、列表、下载
+- 日志上报、查询、统计
+- WebSocket 连接和消息推送
+- 错误处理
+
+```bash
+# 直接运行
+python3 scripts/integration_tests.py --base-url http://localhost
+
+# 使用 Make
+make test-integration CLOUD_URL=http://localhost
+```
+
+### 性能测试
+
+性能测试 (`scripts/performance_tests.py`) 测试以下指标：
+- 日志写入性能 (目标: 1000 条/秒)
+- API 响应时间 (目标: P95 < 500ms)
+- WebSocket 并发连接 (目标: 100 连接)
+- 探针并发心跳 (目标: 10 个探针)
+
+```bash
+# 快速性能测试
+python3 scripts/performance_tests.py --base-url http://localhost
+
+# 完整性能测试
+python3 scripts/performance_tests.py --base-url http://localhost --all \
+    --rate 1000 --duration 60 --concurrency 50 --connections 100 --probes 10
+
+# 单项测试
+python3 scripts/performance_tests.py --log-write --rate 1000 --duration 60
+python3 scripts/performance_tests.py --api-stress --concurrency 50
+python3 scripts/performance_tests.py --ws-test --connections 100
+python3 scripts/performance_tests.py --probe-test --probes 10
 ```
 
 ### NIDS 探针黑盒测试
@@ -319,11 +367,14 @@ Options:
 - [x] **Phase 2**: 云端后端核心功能
 - [x] **Phase 3**: 探针管理程序 (Probe Manager)
 - [x] **Phase 4**: NIDS 探针实现
-
-### 待完成
-
-- [ ] **Phase 5**: 云端前端实现
-- [ ] **Phase 6**: 集成测试与优化
+- [x] **Phase 5**: 云端前端实现
+  - 仪表盘页面 (统计图表、探针概览)
+  - 规则管理页面 (创建、查看版本历史)
+  - 日志展示页面 (WebSocket 实时推送、历史查询)
+  - 探针管理页面 (卡片/列表视图、详情查看)
+- [x] **Phase 6**: 集成测试与优化
+  - 端到端集成测试脚本
+  - 性能测试脚本 (日志写入、API压力、WebSocket、探针并发)
 
 ## 技术栈
 
