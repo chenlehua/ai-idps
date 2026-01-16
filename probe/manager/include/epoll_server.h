@@ -2,9 +2,13 @@
 
 #include <atomic>
 #include <functional>
+#include <map>
+#include <memory>
 #include "json.hpp"
 
 using json = nlohmann::json;
+
+class ProbeConnection;
 
 class EpollServer {
 public:
@@ -24,10 +28,28 @@ public:
     void send_to_probe(int fd, const json& msg);
     void add_timer(int interval_ms, std::function<void()> callback);
 
+    // 广播消息到所有探针
+    void broadcast(const json& msg);
+
+    // 获取连接数
+    size_t connection_count() const { return connections_.size(); }
+
+private:
+    void handle_accept();
+    void handle_read(int fd);
+    void handle_timer();
+
+    void add_to_epoll(int fd, uint32_t events);
+    void remove_from_epoll(int fd);
+
 private:
     int port_;
+    int epoll_fd_;
+    int listen_fd_;
+    int timer_fd_;
     std::atomic<bool> running_;
-    int timer_interval_ms_;
+
+    std::map<int, std::unique_ptr<ProbeConnection>> connections_;
 
     MessageCallback message_callback_;
     ConnectionCallback connect_callback_;
