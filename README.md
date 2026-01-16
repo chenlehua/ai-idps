@@ -24,7 +24,8 @@ ai-idps/
 │   └── Makefile              # Docker 管理命令
 ├── probe/                    # 探针端
 │   ├── common/               # 公共库
-│   └── manager/              # Probe Manager
+│   ├── manager/              # Probe Manager
+│   └── nids/                 # NIDS 探针
 ├── rules/                    # 规则集目录
 │   └── et-open/              # ET Open 规则
 ├── third_party/              # 第三方依赖
@@ -118,13 +119,14 @@ make list                     # 查看所有服务状态
 
 测试脚本会自动测试所有 API 接口并输出结果。
 
-## 编译 Probe Manager
+## 编译探针
 
 ### 前置要求
 
 - CMake >= 3.16
 - GCC >= 11 或 Clang >= 14 (支持 C++17)
-- libcurl-dev
+- libcurl-dev (Probe Manager)
+- Suricata (NIDS Probe)
 
 ### 编译步骤
 
@@ -132,13 +134,20 @@ make list                     # 查看所有服务状态
 # 安装依赖 (Ubuntu/Debian)
 sudo apt-get install -y cmake g++ libcurl4-openssl-dev
 
-# 编译
+# 使用 Makefile（推荐）
+make build SERVICE=probes        # 构建所有探针
+make build SERVICE=probe-manager # 只构建 Probe Manager
+make build SERVICE=nids-probe    # 只构建 NIDS Probe
+
+# 或手动编译
 cd probe
 mkdir -p build && cd build
-cmake ..
+CXX=g++ cmake ..
 make -j$(nproc)
 
-# 可执行文件位于 build/manager/probe-manager
+# 可执行文件位于:
+#   build/manager/probe-manager
+#   build/nids/nids-probe
 ```
 
 ### 运行 Probe Manager
@@ -185,6 +194,63 @@ export LISTEN_PORT=9010
 | `LISTEN_PORT` | `9010` | 监听端口 (探针连接) |
 | `RULES_DIR` | `/var/lib/nids/rules` | 规则文件目录 |
 | `HEARTBEAT_INTERVAL` | `300` | 心跳间隔 (秒) |
+
+## 运行 NIDS Probe
+
+NIDS 探针需要与 Probe Manager 配合使用，负责调用 Suricata 进行网络流量检测。
+
+### 前置要求
+
+- Suricata >= 7.0 已安装
+- 网络接口具有抓包权限
+
+### 运行方式
+
+```bash
+# 使用 Makefile
+make nids-run                     # 前台运行（调试用）
+make nids-up                      # 后台运行
+make nids-down                    # 停止
+make nids-logs                    # 查看日志
+
+# 或直接运行
+./nids-probe \
+    --manager 127.0.0.1:9010 \
+    --interface eth0 \
+    --config /etc/suricata/suricata.yaml
+
+# 使用环境变量
+export MANAGER_HOST=127.0.0.1
+export MANAGER_PORT=9010
+export INTERFACE=eth0
+./nids-probe
+```
+
+### NIDS Probe 命令行选项
+
+```
+Options:
+  -m, --manager <host:port>  Manager 地址 (默认: 127.0.0.1:9000)
+  -i, --interface <name>     监控网卡 (默认: eth0)
+  -c, --config <path>        Suricata 配置文件 (默认: /etc/suricata/suricata.yaml)
+  -r, --rules <path>         规则文件路径 (可选)
+  -l, --log-dir <path>       Suricata 日志目录 (默认: /var/log/suricata)
+  -p, --probe-id <id>        探针 ID (默认: 自动生成)
+  -h, --help                 显示帮助
+  -v, --version              显示版本
+```
+
+### NIDS Probe 环境变量
+
+| 变量 | 默认值 | 说明 |
+|:-----|:-------|:-----|
+| `MANAGER_HOST` | `127.0.0.1` | Probe Manager 主机 |
+| `MANAGER_PORT` | `9000` | Probe Manager 端口 |
+| `INTERFACE` | `eth0` | 监控网卡 |
+| `SURICATA_CONFIG` | `/etc/suricata/suricata.yaml` | Suricata 配置文件 |
+| `RULES_PATH` | | 规则文件路径 |
+| `LOG_DIR` | `/var/log/suricata` | 日志目录 |
+| `PROBE_ID` | | 探针 ID |
 
 ## API 接口
 
@@ -259,9 +325,14 @@ ws.onmessage = (event) => {
   - 规则下载和分发
   - 日志聚合和批量上报
 
+- [x] **Phase 4**: NIDS 探针实现
+  - Suricata 进程管理 (fork/exec)
+  - eve.json 日志实时解析 (inotify)
+  - SIGUSR2 规则热更新
+  - 与 Probe Manager 的 TCP Socket 通信
+
 ### 待完成
 
-- [ ] **Phase 4**: NIDS 探针实现
 - [ ] **Phase 5**: 云端前端实现
 - [ ] **Phase 6**: 集成测试与优化
 
