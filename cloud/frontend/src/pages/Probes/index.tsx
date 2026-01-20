@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { probesApi } from '../../services/api'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { Card, Button, Badge, Modal, StatCard, StatusDot } from '../../components/common'
 
 interface ProbeInstance {
   instance_id: string
@@ -27,13 +28,13 @@ interface ProbeNode {
   instances?: ProbeInstance[]
 }
 
-const STATUS_CONFIG = {
-  online: { label: '在线', color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
-  offline: { label: '离线', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50' },
-  unknown: { label: '未知', color: 'bg-gray-400', textColor: 'text-gray-700', bgColor: 'bg-gray-50' },
-  running: { label: '运行中', color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50' },
-  stopped: { label: '已停止', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgColor: 'bg-yellow-50' },
-  error: { label: '错误', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50' }
+const statusConfig: Record<string, { label: string; variant: 'success' | 'error' | 'warning' | 'gray' }> = {
+  online: { label: '在线', variant: 'success' },
+  offline: { label: '离线', variant: 'error' },
+  unknown: { label: '未知', variant: 'gray' },
+  running: { label: '运行中', variant: 'success' },
+  stopped: { label: '已停止', variant: 'warning' },
+  error: { label: '错误', variant: 'error' }
 }
 
 export default function ProbesPage() {
@@ -44,30 +45,18 @@ export default function ProbesPage() {
   const { data: probesData, isLoading, refetch } = useQuery({
     queryKey: ['probes'],
     queryFn: () => probesApi.list(),
-    refetchInterval: 30000 // 30秒自动刷新
+    refetchInterval: 30000
   })
 
   const probes: ProbeNode[] = probesData?.probes || []
   
-  // 过滤探针
   const filteredProbes = filterStatus 
     ? probes.filter(p => p.status === filterStatus)
     : probes
 
-  // 统计
   const onlineCount = probes.filter(p => p.status === 'online').length
   const offlineCount = probes.filter(p => p.status === 'offline').length
   const totalCount = probes.length
-
-  const getStatusBadge = (status: string) => {
-    const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.unknown
-    return (
-      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${config.bgColor} ${config.textColor}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${config.color}`} />
-        {config.label}
-      </span>
-    )
-  }
 
   const formatLastSeen = (lastSeen?: string) => {
     if (!lastSeen) return '从未'
@@ -79,67 +68,69 @@ export default function ProbesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 头部 */}
+    <div className="space-y-6 animate-fade-in">
+      {/* 页面标题 */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">探针管理</h1>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {isLoading ? '刷新中...' : '刷新'}
-          </button>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">探针管理</h1>
+          <p className="mt-1 text-sm text-slate-500">管理和监控所有探针节点</p>
         </div>
+        <Button
+          variant="secondary"
+          onClick={() => refetch()}
+          loading={isLoading}
+          icon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          }
+        >
+          刷新
+        </Button>
       </div>
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div 
-          className={`cursor-pointer rounded-lg border p-4 transition-colors ${filterStatus === '' ? 'border-blue-500 bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
+        <StatCard
+          title="全部探针"
+          value={totalCount}
+          variant={filterStatus === '' ? 'info' : 'default'}
           onClick={() => setFilterStatus('')}
-        >
-          <div className="text-sm text-gray-500">全部探针</div>
-          <div className="mt-1 text-2xl font-bold">{totalCount}</div>
-        </div>
-        <div 
-          className={`cursor-pointer rounded-lg border p-4 transition-colors ${filterStatus === 'online' ? 'border-green-500 bg-green-50' : 'bg-white hover:bg-gray-50'}`}
+          className={filterStatus === '' ? 'ring-2 ring-info/30' : ''}
+        />
+        <StatCard
+          title="在线探针"
+          value={onlineCount}
+          variant={filterStatus === 'online' ? 'success' : 'default'}
           onClick={() => setFilterStatus(filterStatus === 'online' ? '' : 'online')}
-        >
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            在线
-          </div>
-          <div className="mt-1 text-2xl font-bold text-green-600">{onlineCount}</div>
-        </div>
-        <div 
-          className={`cursor-pointer rounded-lg border p-4 transition-colors ${filterStatus === 'offline' ? 'border-red-500 bg-red-50' : 'bg-white hover:bg-gray-50'}`}
+          className={filterStatus === 'online' ? 'ring-2 ring-success/30' : ''}
+          icon={<StatusDot status="online" size="lg" />}
+        />
+        <StatCard
+          title="离线探针"
+          value={offlineCount}
+          variant={filterStatus === 'offline' ? 'error' : 'default'}
           onClick={() => setFilterStatus(filterStatus === 'offline' ? '' : 'offline')}
-        >
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span className="h-2 w-2 rounded-full bg-red-500" />
-            离线
-          </div>
-          <div className="mt-1 text-2xl font-bold text-red-600">{offlineCount}</div>
-        </div>
+          className={filterStatus === 'offline' ? 'ring-2 ring-error/30' : ''}
+          icon={<StatusDot status="offline" size="lg" />}
+        />
       </div>
 
       {/* 视图切换 */}
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          {filterStatus ? `显示 ${filteredProbes.length} 个${STATUS_CONFIG[filterStatus as keyof typeof STATUS_CONFIG]?.label || ''}探针` : `共 ${totalCount} 个探针`}
+        <div className="text-sm text-slate-500">
+          {filterStatus ? `显示 ${filteredProbes.length} 个${statusConfig[filterStatus]?.label || ''}探针` : `共 ${totalCount} 个探针`}
         </div>
-        <div className="flex rounded-lg border">
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
           <button
             onClick={() => setViewMode('grid')}
-            className={`px-3 py-1.5 text-sm ${viewMode === 'grid' ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 text-sm transition-colors ${viewMode === 'grid' ? 'bg-stripe-primary text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
           >
             卡片
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 text-sm ${viewMode === 'list' ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 text-sm transition-colors ${viewMode === 'list' ? 'bg-stripe-primary text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
           >
             列表
           </button>
@@ -148,243 +139,241 @@ export default function ProbesPage() {
 
       {/* 探针列表 */}
       {isLoading ? (
-        <div className="rounded-lg border bg-white p-12 text-center text-gray-500">
-          加载中...
-        </div>
+        <Card>
+          <Card.Body className="flex items-center justify-center py-12 text-slate-400">
+            <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            加载中...
+          </Card.Body>
+        </Card>
       ) : filteredProbes.length === 0 ? (
-        <div className="rounded-lg border bg-white p-12 text-center text-gray-500">
-          {filterStatus ? '没有符合条件的探针' : '暂无探针数据'}
-        </div>
+        <Card>
+          <Card.Body className="flex flex-col items-center justify-center py-12 text-slate-400">
+            <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+            </svg>
+            {filterStatus ? '没有符合条件的探针' : '暂无探针数据'}
+          </Card.Body>
+        </Card>
       ) : viewMode === 'grid' ? (
-        /* 卡片视图 */
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredProbes.map((probe) => (
-            <div
+            <Card
               key={probe.node_id}
-              className="cursor-pointer rounded-lg border bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+              hoverable
+              className="cursor-pointer"
               onClick={() => setSelectedProbe(probe)}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-900">{probe.name}</h3>
-                  <p className="mt-0.5 font-mono text-xs text-gray-400">{probe.node_id}</p>
+              <Card.Body>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{probe.name}</h3>
+                    <p className="mt-0.5 font-mono text-xs text-slate-400">{probe.node_id}</p>
+                  </div>
+                  <Badge variant={statusConfig[probe.status]?.variant || 'gray'} dot>
+                    {statusConfig[probe.status]?.label || probe.status}
+                  </Badge>
                 </div>
-                {getStatusBadge(probe.status)}
-              </div>
 
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">IP 地址</span>
-                  <span className="font-mono">{probe.ip_address}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">规则版本</span>
-                  <span className="font-mono text-xs">{probe.current_rule_version || '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">最后心跳</span>
-                  <span>{formatLastSeen(probe.last_seen)}</span>
-                </div>
-              </div>
-
-              {/* 探针实例 */}
-              {probe.instances && probe.instances.length > 0 && (
-                <div className="mt-4 border-t pt-3">
-                  <div className="mb-2 text-xs font-medium text-gray-500">探针实例 ({probe.instances.length})</div>
-                  <div className="flex flex-wrap gap-2">
-                    {probe.instances.map((instance) => (
-                      <span
-                        key={instance.instance_id}
-                        className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs ${
-                          instance.status === 'running' ? 'bg-green-100 text-green-700' :
-                          instance.status === 'error' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[instance.status]?.color || 'bg-gray-400'}`} />
-                        {instance.probe_type}
-                        {instance.interface && <span className="text-gray-400">({instance.interface})</span>}
-                      </span>
-                    ))}
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">IP 地址</span>
+                    <span className="font-mono text-slate-700">{probe.ip_address}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">规则版本</span>
+                    <span className="font-mono text-xs text-slate-700">{probe.current_rule_version || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">最后心跳</span>
+                    <span className="text-slate-700">{formatLastSeen(probe.last_seen)}</span>
                   </div>
                 </div>
-              )}
-            </div>
+
+                {probe.instances && probe.instances.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <div className="mb-2 text-xs font-medium text-slate-500">探针实例 ({probe.instances.length})</div>
+                    <div className="flex flex-wrap gap-2">
+                      {probe.instances.map((instance) => (
+                        <Badge
+                          key={instance.instance_id}
+                          variant={statusConfig[instance.status]?.variant || 'gray'}
+                          dot
+                        >
+                          {instance.probe_type}
+                          {instance.interface && <span className="text-slate-400 ml-1">({instance.interface})</span>}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
           ))}
         </div>
       ) : (
-        /* 列表视图 */
-        <div className="overflow-hidden rounded-lg border bg-white shadow-sm">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">名称</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">状态</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">IP 地址</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">规则版本</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">最后心跳</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">实例数</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredProbes.map((probe) => (
-                <tr key={probe.node_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{probe.name}</div>
-                    <div className="font-mono text-xs text-gray-400">{probe.node_id}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {getStatusBadge(probe.status)}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 font-mono text-sm">
-                    {probe.ip_address}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 font-mono text-sm text-gray-500">
-                    {probe.current_rule_version || '-'}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                    {formatLastSeen(probe.last_seen)}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4 text-sm">
-                    {probe.instances?.length || 0}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <button
-                      onClick={() => setSelectedProbe(probe)}
-                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                    >
-                      详情
-                    </button>
-                  </td>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">名称</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">状态</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">IP 地址</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">规则版本</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">最后心跳</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">实例数</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProbes.map((probe) => (
+                  <tr key={probe.node_id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{probe.name}</div>
+                      <div className="font-mono text-xs text-slate-400">{probe.node_id}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge variant={statusConfig[probe.status]?.variant || 'gray'} dot>
+                        {statusConfig[probe.status]?.label || probe.status}
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 font-mono text-sm text-slate-700">
+                      {probe.ip_address}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 font-mono text-sm text-slate-500">
+                      {probe.current_rule_version || '-'}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500">
+                      {formatLastSeen(probe.last_seen)}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
+                      {probe.instances?.length || 0}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <Button variant="text" size="sm" onClick={() => setSelectedProbe(probe)}>
+                        详情
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* 探针详情弹窗 */}
-      {selectedProbe && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold">{selectedProbe.name}</h3>
-                <p className="font-mono text-sm text-gray-400">{selectedProbe.node_id}</p>
-              </div>
-              <button
-                onClick={() => setSelectedProbe(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="max-h-[65vh] overflow-y-auto p-6">
-              <div className="space-y-6">
-                {/* 基本信息 */}
+      <Modal
+        isOpen={selectedProbe !== null}
+        onClose={() => setSelectedProbe(null)}
+        title={selectedProbe?.name}
+        size="md"
+        footer={<Button variant="secondary" onClick={() => setSelectedProbe(null)}>关闭</Button>}
+      >
+        {selectedProbe && (
+          <div className="space-y-6">
+            <p className="font-mono text-sm text-slate-400">{selectedProbe.node_id}</p>
+
+            {/* 基本信息 */}
+            <div>
+              <h4 className="mb-3 font-medium text-slate-900">基本信息</h4>
+              <div className="grid grid-cols-2 gap-4 rounded-lg bg-slate-50 p-4">
                 <div>
-                  <h4 className="mb-3 font-medium text-gray-900">基本信息</h4>
-                  <div className="grid grid-cols-2 gap-4 rounded-lg bg-gray-50 p-4">
-                    <div>
-                      <div className="text-sm text-gray-500">状态</div>
-                      <div className="mt-1">{getStatusBadge(selectedProbe.status)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">IP 地址</div>
-                      <div className="mt-1 font-mono">{selectedProbe.ip_address}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">规则版本</div>
-                      <div className="mt-1 font-mono text-sm">{selectedProbe.current_rule_version || '-'}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">最后心跳</div>
-                      <div className="mt-1">{formatLastSeen(selectedProbe.last_seen)}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">注册时间</div>
-                      <div className="mt-1 text-sm">
-                        {selectedProbe.created_at ? new Date(selectedProbe.created_at).toLocaleString('zh-CN') : '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">更新时间</div>
-                      <div className="mt-1 text-sm">
-                        {selectedProbe.updated_at ? new Date(selectedProbe.updated_at).toLocaleString('zh-CN') : '-'}
-                      </div>
-                    </div>
+                  <div className="text-sm text-slate-500">状态</div>
+                  <div className="mt-1">
+                    <Badge variant={statusConfig[selectedProbe.status]?.variant || 'gray'} dot>
+                      {statusConfig[selectedProbe.status]?.label || selectedProbe.status}
+                    </Badge>
                   </div>
                 </div>
-
-                {/* 探针实例 */}
                 <div>
-                  <h4 className="mb-3 font-medium text-gray-900">
-                    探针实例 ({selectedProbe.instances?.length || 0})
-                  </h4>
-                  {selectedProbe.instances && selectedProbe.instances.length > 0 ? (
-                    <div className="space-y-3">
-                      {selectedProbe.instances.map((instance) => (
-                        <div key={instance.instance_id} className="rounded-lg border p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{instance.probe_type}</div>
-                              <div className="font-mono text-xs text-gray-400">{instance.instance_id}</div>
-                            </div>
-                            {getStatusBadge(instance.status)}
-                          </div>
-                          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-gray-500">网络接口: </span>
-                              <span className="font-mono">{instance.interface || '-'}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">最后活跃: </span>
-                              <span>{formatLastSeen(instance.last_seen)}</span>
-                            </div>
-                          </div>
-                          {instance.metrics && Object.keys(instance.metrics).length > 0 && (
-                            <div className="mt-3">
-                              <div className="text-sm text-gray-500">性能指标:</div>
-                              <pre className="mt-1 rounded bg-gray-100 p-2 text-xs">
-                                {JSON.stringify(instance.metrics, null, 2)}
-                              </pre>
-                            </div>
-                          )}
+                  <div className="text-sm text-slate-500">IP 地址</div>
+                  <div className="mt-1 font-mono text-slate-900">{selectedProbe.ip_address}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-slate-500">规则版本</div>
+                  <div className="mt-1 font-mono text-sm text-slate-900">{selectedProbe.current_rule_version || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-slate-500">最后心跳</div>
+                  <div className="mt-1 text-slate-900">{formatLastSeen(selectedProbe.last_seen)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-slate-500">注册时间</div>
+                  <div className="mt-1 text-sm text-slate-900">
+                    {selectedProbe.created_at ? new Date(selectedProbe.created_at).toLocaleString('zh-CN') : '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-slate-500">更新时间</div>
+                  <div className="mt-1 text-sm text-slate-900">
+                    {selectedProbe.updated_at ? new Date(selectedProbe.updated_at).toLocaleString('zh-CN') : '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 探针实例 */}
+            <div>
+              <h4 className="mb-3 font-medium text-slate-900">
+                探针实例 ({selectedProbe.instances?.length || 0})
+              </h4>
+              {selectedProbe.instances && selectedProbe.instances.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedProbe.instances.map((instance) => (
+                    <div key={instance.instance_id} className="rounded-lg border border-slate-200 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-slate-900">{instance.probe_type}</div>
+                          <div className="font-mono text-xs text-slate-400">{instance.instance_id}</div>
                         </div>
-                      ))}
+                        <Badge variant={statusConfig[instance.status]?.variant || 'gray'} dot>
+                          {statusConfig[instance.status]?.label || instance.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-slate-500">网络接口: </span>
+                          <span className="font-mono text-slate-700">{instance.interface || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">最后活跃: </span>
+                          <span className="text-slate-700">{formatLastSeen(instance.last_seen)}</span>
+                        </div>
+                      </div>
+                      {instance.metrics && Object.keys(instance.metrics).length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-sm text-slate-500 mb-1">性能指标:</div>
+                          <pre className="rounded-lg bg-slate-900 p-2 text-xs text-slate-100 overflow-x-auto">
+                            {JSON.stringify(instance.metrics, null, 2)}
+                          </pre>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed p-6 text-center text-gray-500">
-                      暂无探针实例
-                    </div>
-                  )}
+                  ))}
                 </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-slate-400">
+                  暂无探针实例
+                </div>
+              )}
+            </div>
 
-                {/* 系统状态 */}
-                {selectedProbe.system_status && Object.keys(selectedProbe.system_status).length > 0 && (
-                  <div>
-                    <h4 className="mb-3 font-medium text-gray-900">系统状态</h4>
-                    <pre className="rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
-                      {JSON.stringify(selectedProbe.system_status, null, 2)}
-                    </pre>
-                  </div>
-                )}
+            {/* 系统状态 */}
+            {selectedProbe.system_status && Object.keys(selectedProbe.system_status).length > 0 && (
+              <div>
+                <h4 className="mb-3 font-medium text-slate-900">系统状态</h4>
+                <pre className="rounded-lg bg-slate-900 p-4 text-sm text-slate-100 overflow-x-auto">
+                  {JSON.stringify(selectedProbe.system_status, null, 2)}
+                </pre>
               </div>
-            </div>
-            <div className="border-t px-6 py-4">
-              <button
-                onClick={() => setSelectedProbe(null)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-              >
-                关闭
-              </button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

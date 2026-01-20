@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ruleUpdateApi, rulesApi } from '../../services/api'
+import { Card, Button, Badge, Input, Tabs, ProgressBar, StatCard } from '../../components/common'
 
 // 类型定义
 interface DownloadStatus {
@@ -54,21 +55,21 @@ interface RuleVersion {
 }
 
 // 状态显示映射
-const statusMap: Record<string, { label: string; color: string }> = {
-  idle: { label: '空闲', color: 'gray' },
-  downloading: { label: '下载中', color: 'blue' },
-  parsing: { label: '解析中', color: 'yellow' },
-  comparing: { label: '比较中', color: 'yellow' },
-  ready: { label: '就绪', color: 'green' },
-  error: { label: '错误', color: 'red' }
+const statusConfig: Record<string, { label: string; variant: 'gray' | 'info' | 'warning' | 'success' | 'error' }> = {
+  idle: { label: '空闲', variant: 'gray' },
+  downloading: { label: '下载中', variant: 'info' },
+  parsing: { label: '解析中', variant: 'warning' },
+  comparing: { label: '比较中', variant: 'warning' },
+  ready: { label: '就绪', variant: 'success' },
+  error: { label: '错误', variant: 'error' }
 }
 
 // 严重级别颜色
-const severityColors: Record<number, string> = {
-  1: 'text-red-600 bg-red-50',
-  2: 'text-orange-600 bg-orange-50',
-  3: 'text-yellow-600 bg-yellow-50',
-  4: 'text-blue-600 bg-blue-50'
+const severityConfig: Record<number, { variant: 'error' | 'warning' | 'info' | 'gray' }> = {
+  1: { variant: 'error' },
+  2: { variant: 'warning' },
+  3: { variant: 'info' },
+  4: { variant: 'gray' }
 }
 
 export default function RuleUpdatePage() {
@@ -140,170 +141,150 @@ export default function RuleUpdatePage() {
 
   const versions: RuleVersion[] = versionsData?.versions || []
   const status = downloadStatus?.status || 'idle'
-  const statusInfo = statusMap[status] || statusMap.idle
+  const statusInfo = statusConfig[status] || statusConfig.idle
+
+  const tabs = [
+    { key: 'download', label: '下载更新' },
+    { key: 'preview', label: '变更预览', badge: preview?.summary?.has_changes ? preview.summary.total_changes : undefined },
+    { key: 'versions', label: '版本历史' }
+  ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
+      {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">规则更新</h1>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-${statusInfo.color}-100 text-${statusInfo.color}-800`}>
-            <span className={`mr-2 h-2 w-2 rounded-full bg-${statusInfo.color}-500`}></span>
-            {statusInfo.label}
-          </span>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">规则更新</h1>
+          <p className="mt-1 text-sm text-slate-500">下载、预览和应用规则更新</p>
         </div>
+        <Badge variant={statusInfo.variant} dot>
+          {statusInfo.label}
+        </Badge>
       </div>
 
       {/* 标签页 */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('download')}
-            className={`border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === 'download'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-            }`}
-          >
-            下载更新
-          </button>
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === 'preview'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-            }`}
-          >
-            变更预览
-            {preview?.summary?.has_changes && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600">
-                {preview.summary.total_changes}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('versions')}
-            className={`border-b-2 py-4 px-1 text-sm font-medium ${
-              activeTab === 'versions'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-            }`}
-          >
-            版本历史
-          </button>
-        </nav>
-      </div>
+      <Tabs
+        tabs={tabs}
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as any)}
+      />
 
       {/* 下载更新标签页 */}
       {activeTab === 'download' && (
         <div className="space-y-6">
           {/* 下载卡片 */}
-          <div className="rounded-lg border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold">从 ET Open 下载规则</h2>
-            <p className="mb-6 text-sm text-gray-600">
-              点击下方按钮从 Emerging Threats Open 下载最新的入侵检测规则。
-              下载完成后可以预览变更并选择性应用更新。
-            </p>
+          <Card>
+            <Card.Header>从 ET Open 下载规则</Card.Header>
+            <Card.Body>
+              <p className="mb-6 text-slate-600">
+                点击下方按钮从 Emerging Threats Open 下载最新的入侵检测规则。
+                下载完成后可以预览变更并选择性应用更新。
+              </p>
 
-            {/* 进度显示 */}
-            {(status === 'downloading' || status === 'parsing' || status === 'comparing') && (
-              <div className="mb-6">
-                <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-gray-600">{downloadStatus?.message || '处理中...'}</span>
-                  <span className="text-gray-500">{downloadStatus?.progress?.toFixed(1)}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-gray-200">
-                  <div
-                    className="h-2 rounded-full bg-blue-600 transition-all duration-300"
-                    style={{ width: `${downloadStatus?.progress || 0}%` }}
-                  ></div>
-                </div>
-                {downloadStatus?.downloaded_bytes && downloadStatus.downloaded_bytes > 0 && (
-                  <div className="mt-2 text-xs text-gray-500">
-                    已下载: {(downloadStatus.downloaded_bytes / 1024 / 1024).toFixed(2)} MB
-                    {downloadStatus.total_bytes && downloadStatus.total_bytes > 0 && (
-                      <> / {(downloadStatus.total_bytes / 1024 / 1024).toFixed(2)} MB</>
-                    )}
+              {/* 进度显示 */}
+              {(status === 'downloading' || status === 'parsing' || status === 'comparing') && (
+                <div className="mb-6 p-4 rounded-lg bg-slate-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">{downloadStatus?.message || '处理中...'}</span>
+                    <span className="text-sm text-slate-500">{downloadStatus?.progress?.toFixed(1)}%</span>
                   </div>
-                )}
-              </div>
-            )}
+                  <ProgressBar value={downloadStatus?.progress || 0} variant="primary" />
+                  {downloadStatus?.downloaded_bytes && downloadStatus.downloaded_bytes > 0 && (
+                    <div className="mt-2 text-xs text-slate-500">
+                      已下载: {(downloadStatus.downloaded_bytes / 1024 / 1024).toFixed(2)} MB
+                      {downloadStatus.total_bytes && downloadStatus.total_bytes > 0 && (
+                        <> / {(downloadStatus.total_bytes / 1024 / 1024).toFixed(2)} MB</>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {/* 错误提示 */}
-            {status === 'error' && (
-              <div className="mb-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">
-                {downloadStatus?.message || '下载失败，请重试'}
-              </div>
-            )}
+              {/* 错误提示 */}
+              {status === 'error' && (
+                <div className="mb-6 p-4 rounded-lg bg-error-light border border-error/20">
+                  <div className="flex items-center gap-2 text-error">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-medium">下载失败</span>
+                  </div>
+                  <p className="mt-1 text-sm text-error-dark">{downloadStatus?.message || '请重试'}</p>
+                </div>
+              )}
 
-            {/* 就绪提示 */}
-            {status === 'ready' && (
-              <div className="mb-6 rounded-lg bg-green-50 p-4 text-sm text-green-700">
-                规则下载完成！请切换到"变更预览"标签页查看变更内容。
-              </div>
-            )}
+              {/* 就绪提示 */}
+              {status === 'ready' && (
+                <div className="mb-6 p-4 rounded-lg bg-success-light border border-success/20">
+                  <div className="flex items-center gap-2 text-success-dark">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-medium">规则下载完成！</span>
+                  </div>
+                  <p className="mt-1 text-sm text-success-dark">请切换到"变更预览"标签页查看变更内容。</p>
+                </div>
+              )}
 
-            {/* 操作按钮 */}
-            <div className="flex gap-3">
-              {status === 'idle' || status === 'error' ? (
-                <>
-                  <button
-                    onClick={() => downloadMutation.mutate(false)}
-                    disabled={downloadMutation.isPending}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              {/* 操作按钮 */}
+              <div className="flex gap-3">
+                {status === 'idle' || status === 'error' ? (
+                  <>
+                    <Button
+                      onClick={() => downloadMutation.mutate(false)}
+                      loading={downloadMutation.isPending}
+                    >
+                      开始下载
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => downloadMutation.mutate(true)}
+                      disabled={downloadMutation.isPending}
+                    >
+                      强制重新下载
+                    </Button>
+                  </>
+                ) : status === 'downloading' || status === 'parsing' || status === 'comparing' ? (
+                  <Button
+                    variant="danger"
+                    onClick={() => cancelMutation.mutate()}
+                    loading={cancelMutation.isPending}
                   >
-                    {downloadMutation.isPending ? '启动中...' : '开始下载'}
-                  </button>
-                  <button
-                    onClick={() => downloadMutation.mutate(true)}
-                    disabled={downloadMutation.isPending}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    取消下载
+                  </Button>
+                ) : status === 'ready' ? (
+                  <Button
+                    variant="success"
+                    onClick={() => setActiveTab('preview')}
                   >
-                    强制重新下载
-                  </button>
-                </>
-              ) : status === 'downloading' || status === 'parsing' || status === 'comparing' ? (
-                <button
-                  onClick={() => cancelMutation.mutate()}
-                  disabled={cancelMutation.isPending}
-                  className="rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  取消下载
-                </button>
-              ) : status === 'ready' ? (
-                <button
-                  onClick={() => setActiveTab('preview')}
-                  className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                >
-                  查看变更预览
-                </button>
-              ) : null}
-            </div>
-          </div>
+                    查看变更预览
+                  </Button>
+                ) : null}
+              </div>
+            </Card.Body>
+          </Card>
 
           {/* 说明卡片 */}
-          <div className="rounded-lg border bg-white p-6 shadow-sm">
-            <h3 className="mb-3 font-semibold">关于 ET Open 规则</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start">
-                <span className="mr-2 text-blue-500">•</span>
-                Emerging Threats Open 是一个免费的开源入侵检测规则集
-              </li>
-              <li className="flex items-start">
-                <span className="mr-2 text-blue-500">•</span>
-                包含针对恶意软件、漏洞利用、网络扫描等威胁的检测规则
-              </li>
-              <li className="flex items-start">
-                <span className="mr-2 text-blue-500">•</span>
-                规则会定期更新，建议每周至少同步一次
-              </li>
-              <li className="flex items-start">
-                <span className="mr-2 text-blue-500">•</span>
-                下载的规则会自动进行解析、分类和增量对比
-              </li>
-            </ul>
-          </div>
+          <Card>
+            <Card.Header>关于 ET Open 规则</Card.Header>
+            <Card.Body>
+              <ul className="space-y-3">
+                {[
+                  'Emerging Threats Open 是一个免费的开源入侵检测规则集',
+                  '包含针对恶意软件、漏洞利用、网络扫描等威胁的检测规则',
+                  '规则会定期更新，建议每周至少同步一次',
+                  '下载的规则会自动进行解析、分类和增量对比'
+                ].map((text, index) => (
+                  <li key={index} className="flex items-start gap-3 text-slate-600">
+                    <svg className="w-5 h-5 text-stripe-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </Card.Body>
+          </Card>
         </div>
       )}
 
@@ -311,116 +292,120 @@ export default function RuleUpdatePage() {
       {activeTab === 'preview' && (
         <div className="space-y-6">
           {previewLoading || statusLoading ? (
-            <div className="rounded-lg border bg-white p-6 shadow-sm text-center text-gray-500">
-              加载中...
-            </div>
+            <Card>
+              <Card.Body className="flex items-center justify-center py-12 text-slate-400">
+                <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                加载中...
+              </Card.Body>
+            </Card>
           ) : !preview ? (
-            <div className="rounded-lg border bg-white p-6 shadow-sm text-center text-gray-500">
-              暂无预览数据，请先下载规则
-            </div>
+            <Card>
+              <Card.Body className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                暂无预览数据，请先下载规则
+              </Card.Body>
+            </Card>
           ) : !preview.summary.has_changes ? (
-            <div className="rounded-lg border bg-white p-6 shadow-sm text-center text-gray-500">
-              没有发现规则变更，当前规则库已是最新
-            </div>
+            <Card>
+              <Card.Body className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <svg className="w-12 h-12 mb-3 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-slate-600">没有发现规则变更，当前规则库已是最新</p>
+              </Card.Body>
+            </Card>
           ) : (
             <>
               {/* 变更摘要 */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="rounded-lg border bg-white p-4 shadow-sm">
-                  <div className="text-sm text-gray-500">新增规则</div>
-                  <div className="mt-1 text-2xl font-semibold text-green-600">
-                    +{preview.summary.added_count}
-                  </div>
-                </div>
-                <div className="rounded-lg border bg-white p-4 shadow-sm">
-                  <div className="text-sm text-gray-500">修改规则</div>
-                  <div className="mt-1 text-2xl font-semibold text-yellow-600">
-                    ~{preview.summary.modified_count}
-                  </div>
-                </div>
-                <div className="rounded-lg border bg-white p-4 shadow-sm">
-                  <div className="text-sm text-gray-500">删除规则</div>
-                  <div className="mt-1 text-2xl font-semibold text-red-600">
-                    -{preview.summary.deleted_count}
-                  </div>
-                </div>
-                <div className="rounded-lg border bg-white p-4 shadow-sm">
-                  <div className="text-sm text-gray-500">未变更规则</div>
-                  <div className="mt-1 text-2xl font-semibold text-gray-600">
-                    {preview.summary.unchanged_count}
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <StatCard
+                  title="新增规则"
+                  value={`+${preview.summary.added_count}`}
+                  variant="success"
+                />
+                <StatCard
+                  title="修改规则"
+                  value={`~${preview.summary.modified_count}`}
+                  variant="warning"
+                />
+                <StatCard
+                  title="删除规则"
+                  value={`-${preview.summary.deleted_count}`}
+                  variant="error"
+                />
+                <StatCard
+                  title="未变更规则"
+                  value={preview.summary.unchanged_count.toString()}
+                  variant="default"
+                />
               </div>
 
               {/* 新增规则列表 */}
               {preview.added_rules.length > 0 && (
-                <div className="rounded-lg border bg-white shadow-sm">
-                  <div className="border-b px-6 py-4">
-                    <h3 className="font-semibold text-green-600">
-                      新增规则 ({preview.added_total})
-                    </h3>
-                  </div>
+                <Card>
+                  <Card.Header className="text-success-dark">
+                    新增规则 ({preview.added_total})
+                  </Card.Header>
                   <div className="max-h-64 overflow-y-auto">
                     <table className="min-w-full">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-slate-50 sticky top-0">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">SID</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">消息</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">分类</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">严重级别</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">SID</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">消息</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">分类</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">级别</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-slate-100">
                         {preview.added_rules.slice(0, 50).map((rule) => (
-                          <tr key={rule.sid} className="hover:bg-gray-50">
+                          <tr key={rule.sid} className="hover:bg-slate-50">
                             <td className="whitespace-nowrap px-6 py-3 font-mono text-sm">{rule.sid}</td>
-                            <td className="px-6 py-3 text-sm text-gray-600 truncate max-w-xs">{rule.msg || '-'}</td>
-                            <td className="px-6 py-3 text-sm text-gray-500">{rule.classtype || '-'}</td>
+                            <td className="px-6 py-3 text-sm text-slate-600 truncate max-w-xs">{rule.msg || '-'}</td>
+                            <td className="px-6 py-3 text-sm text-slate-500">{rule.classtype || '-'}</td>
                             <td className="px-6 py-3">
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${severityColors[rule.severity] || 'text-gray-600 bg-gray-50'}`}>
-                                {rule.severity}
-                              </span>
+                              <Badge variant={severityConfig[rule.severity]?.variant || 'gray'}>{rule.severity}</Badge>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {preview.added_total > 50 && (
-                      <div className="border-t px-6 py-3 text-sm text-gray-500 text-center">
+                      <div className="border-t px-6 py-3 text-sm text-slate-500 text-center">
                         还有 {preview.added_total - 50} 条规则...
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 修改规则列表 */}
               {preview.modified_rules.length > 0 && (
-                <div className="rounded-lg border bg-white shadow-sm">
-                  <div className="border-b px-6 py-4">
-                    <h3 className="font-semibold text-yellow-600">
-                      修改规则 ({preview.modified_total})
-                    </h3>
-                  </div>
+                <Card>
+                  <Card.Header className="text-warning-dark">
+                    修改规则 ({preview.modified_total})
+                  </Card.Header>
                   <div className="max-h-64 overflow-y-auto">
                     <table className="min-w-full">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-slate-50 sticky top-0">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">SID</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">消息</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">变更内容</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">SID</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">消息</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">变更内容</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-slate-100">
                         {preview.modified_rules.slice(0, 50).map((rule) => (
-                          <tr key={rule.sid} className="hover:bg-gray-50">
+                          <tr key={rule.sid} className="hover:bg-slate-50">
                             <td className="whitespace-nowrap px-6 py-3 font-mono text-sm">{rule.sid}</td>
-                            <td className="px-6 py-3 text-sm text-gray-600 truncate max-w-xs">{rule.msg || '-'}</td>
-                            <td className="px-6 py-3 text-sm text-gray-500">
+                            <td className="px-6 py-3 text-sm text-slate-600 truncate max-w-xs">{rule.msg || '-'}</td>
+                            <td className="px-6 py-3 text-sm text-slate-500">
                               {rule.changes?.map((change, idx) => (
-                                <span key={idx} className="mr-2 text-xs">
-                                  {change.field}
-                                </span>
+                                <Badge key={idx} variant="gray" className="mr-1">{change.field}</Badge>
                               )) || 'rev 变更'}
                             </td>
                           </tr>
@@ -428,87 +413,83 @@ export default function RuleUpdatePage() {
                       </tbody>
                     </table>
                     {preview.modified_total > 50 && (
-                      <div className="border-t px-6 py-3 text-sm text-gray-500 text-center">
+                      <div className="border-t px-6 py-3 text-sm text-slate-500 text-center">
                         还有 {preview.modified_total - 50} 条规则...
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 删除规则列表 */}
               {preview.deleted_rules.length > 0 && (
-                <div className="rounded-lg border bg-white shadow-sm">
-                  <div className="border-b px-6 py-4">
-                    <h3 className="font-semibold text-red-600">
-                      删除规则 ({preview.deleted_total})
-                    </h3>
-                  </div>
+                <Card>
+                  <Card.Header className="text-error-dark">
+                    删除规则 ({preview.deleted_total})
+                  </Card.Header>
                   <div className="max-h-64 overflow-y-auto">
                     <table className="min-w-full">
-                      <thead className="bg-gray-50 sticky top-0">
+                      <thead className="bg-slate-50 sticky top-0">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">SID</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">消息</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">分类</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">SID</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">消息</th>
+                          <th className="px-6 py-3 text-left text-sm font-medium text-slate-700">分类</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-slate-100">
                         {preview.deleted_rules.slice(0, 50).map((rule) => (
-                          <tr key={rule.sid} className="hover:bg-gray-50">
+                          <tr key={rule.sid} className="hover:bg-slate-50">
                             <td className="whitespace-nowrap px-6 py-3 font-mono text-sm">{rule.sid}</td>
-                            <td className="px-6 py-3 text-sm text-gray-600 truncate max-w-xs">{rule.msg || '-'}</td>
-                            <td className="px-6 py-3 text-sm text-gray-500">{rule.classtype || '-'}</td>
+                            <td className="px-6 py-3 text-sm text-slate-600 truncate max-w-xs">{rule.msg || '-'}</td>
+                            <td className="px-6 py-3 text-sm text-slate-500">{rule.classtype || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {preview.deleted_total > 50 && (
-                      <div className="border-t px-6 py-3 text-sm text-gray-500 text-center">
+                      <div className="border-t px-6 py-3 text-sm text-slate-500 text-center">
                         还有 {preview.deleted_total - 50} 条规则...
                       </div>
                     )}
                   </div>
-                </div>
+                </Card>
               )}
 
               {/* 确认更新 */}
-              <div className="rounded-lg border bg-white p-6 shadow-sm">
-                <h3 className="mb-4 font-semibold">确认更新</h3>
-                <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    版本描述 (可选)
-                  </label>
-                  <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="例如：更新 ET Open 规则 2024-01"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => updateMutation.mutate()}
-                    disabled={updateMutation.isPending}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {updateMutation.isPending ? '更新中...' : '应用更新'}
-                  </button>
-                  <button
-                    onClick={() => downloadMutation.mutate(true)}
-                    disabled={downloadMutation.isPending}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    重新下载
-                  </button>
-                </div>
-                {updateMutation.isError && (
-                  <div className="mt-3 text-sm text-red-600">
-                    更新失败: {(updateMutation.error as Error).message}
+              <Card>
+                <Card.Header>确认更新</Card.Header>
+                <Card.Body>
+                  <div className="mb-4">
+                    <Input
+                      label="版本描述 (可选)"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="例如：更新 ET Open 规则 2024-01"
+                    />
                   </div>
-                )}
-              </div>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="success"
+                      onClick={() => updateMutation.mutate()}
+                      loading={updateMutation.isPending}
+                    >
+                      应用更新
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => downloadMutation.mutate(true)}
+                      disabled={downloadMutation.isPending}
+                    >
+                      重新下载
+                    </Button>
+                  </div>
+                  {updateMutation.isError && (
+                    <p className="mt-3 text-sm text-error">
+                      更新失败: {(updateMutation.error as Error).message}
+                    </p>
+                  )}
+                </Card.Body>
+              </Card>
             </>
           )}
         </div>
@@ -516,56 +497,47 @@ export default function RuleUpdatePage() {
 
       {/* 版本历史标签页 */}
       {activeTab === 'versions' && (
-        <div className="rounded-lg border bg-white shadow-sm">
-          <div className="border-b px-6 py-4">
-            <h2 className="text-lg font-semibold">版本历史</h2>
-          </div>
-
+        <Card>
+          <Card.Header>版本历史</Card.Header>
           {versionsLoading ? (
-            <div className="p-6 text-gray-500">加载中...</div>
+            <Card.Body className="flex items-center justify-center py-12 text-slate-400">
+              <svg className="animate-spin h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              加载中...
+            </Card.Body>
           ) : versions.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">版本</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">描述</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">规则数</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">状态</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">创建时间</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">校验和</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">版本</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">描述</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">规则数</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">状态</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">创建时间</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">校验和</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-100">
                   {versions.map((version) => (
-                    <tr key={version.id} className="hover:bg-gray-50">
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <span className="font-mono text-sm">{version.version}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-600">
-                          {version.description || '-'}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                    <tr key={version.id} className="hover:bg-slate-50">
+                      <td className="whitespace-nowrap px-6 py-4 font-mono text-sm">{version.version}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{version.description || '-'}</td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500">
                         {version.rule_count?.toLocaleString() || '-'}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
-                        {version.is_active ? (
-                          <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-                            当前使用
-                          </span>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
-                            历史版本
-                          </span>
-                        )}
+                        <Badge variant={version.is_active ? 'success' : 'gray'}>
+                          {version.is_active ? '当前使用' : '历史版本'}
+                        </Badge>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-500">
                         {new Date(version.created_at).toLocaleString('zh-CN')}
                       </td>
                       <td className="whitespace-nowrap px-6 py-4">
-                        <span className="font-mono text-xs text-gray-400">
+                        <span className="font-mono text-xs text-slate-400">
                           {version.checksum?.slice(0, 16)}...
                         </span>
                       </td>
@@ -575,11 +547,14 @@ export default function RuleUpdatePage() {
               </table>
             </div>
           ) : (
-            <div className="p-6 text-center text-gray-500">
+            <Card.Body className="flex flex-col items-center justify-center py-12 text-slate-400">
+              <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               暂无规则版本，请先下载并应用规则更新
-            </div>
+            </Card.Body>
           )}
-        </div>
+        </Card>
       )}
     </div>
   )
