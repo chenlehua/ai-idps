@@ -1235,17 +1235,17 @@ graph TB
     end
 
     subgraph 配置文件
-        C1[/etc/probe-manager/config.json]
-        C2[/etc/nids-probe/config.json]
-        C3[/etc/suricata/suricata.yaml]
+        C1["/etc/probe-manager/config.json"]
+        C2["/etc/nids-probe/config.json"]
+        C3["/etc/suricata/suricata.yaml"]
     end
 
     subgraph 规则文件
-        R1[/var/lib/nids/rules/]
+        R1["/var/lib/nids/rules/"]
     end
 
     subgraph 日志文件
-        L1[/var/log/suricata/eve.json]
+        L1["/var/log/suricata/eve.json"]
     end
 
     PM --> C1
