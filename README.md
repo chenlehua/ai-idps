@@ -287,7 +287,7 @@ Probe Manager 是探针管理程序，负责：
     "probe_name": "Production Probe 1",
     "probe_ip": "192.168.1.100",
     "probe_types": ["nids"],
-    "cloud_url": "http://localhost/api/v1/probe",
+    "cloud_url": "http://localhost",
     "listen_port": 9010,
     "rules_dir": "/var/lib/nids/rules",
     "heartbeat_interval": 300
@@ -300,7 +300,7 @@ Probe Manager 是探针管理程序，负责：
 |:-----|:-------|:-----|
 | `PROBE_ID` | `probe-001` | 探针节点 ID |
 | `PROBE_NAME` | `default-probe` | 探针名称 |
-| `CLOUD_URL` | `http://localhost:8000/api/v1/probe` | 云端 API 地址 |
+| `CLOUD_URL` | `http://localhost` | 云端 API 地址（基础 URL，不含路径） |
 | `LISTEN_PORT` | `9010` | 监听端口 |
 | `RULES_DIR` | `/var/lib/nids/rules` | 规则文件目录 |
 | `HEARTBEAT_INTERVAL` | `300` | 心跳间隔 (秒) |
