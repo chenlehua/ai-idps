@@ -26,6 +26,7 @@ interface TestItem {
   attack_type: string | null
   response_time_ms: number | null
   error_message: string | null
+  matched_log_id: string | null
   executed_at: string | null
 }
 
@@ -493,6 +494,7 @@ export default function AttackTestPage() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">状态</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">攻击类型</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">响应时间</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">关联日志</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">执行时间</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">错误信息</th>
                       </tr>
@@ -511,6 +513,15 @@ export default function AttackTestPage() {
                           </td>
                           <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
                             {item.response_time_ms ? `${item.response_time_ms}ms` : '-'}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-3 text-sm">
+                            {item.matched_log_id ? (
+                              <span className="text-blue-600 font-mono text-xs" title={item.matched_log_id}>
+                                {item.matched_log_id.slice(0, 8)}...
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                           <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500">
                             {item.executed_at ? new Date(item.executed_at).toLocaleString('zh-CN') : '-'}

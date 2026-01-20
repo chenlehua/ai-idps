@@ -99,6 +99,7 @@ class TestItemResponse(BaseModel):
     attack_type: Optional[str] = Field(default=None, description="攻击类型")
     response_time_ms: Optional[int] = Field(default=None, description="响应时间(ms)")
     error_message: Optional[str] = Field(default=None, description="错误信息")
+    matched_log_id: Optional[str] = Field(default=None, description="匹配的日志ID")
     executed_at: Optional[datetime] = Field(default=None, description="执行时间")
 
 

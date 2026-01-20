@@ -287,5 +287,107 @@ class ClickHouseService:
             print(f"ClickHouse get_alerts_by_test_id error: {e}")
             return []
 
+    async def find_matching_alert(
+        self,
+        probe_id: str,
+        signature_id: int,
+        start_time: datetime,
+        end_time: datetime
+    ) -> Optional[dict]:
+        """根据SID和时间范围查找匹配的告警日志
+
+        用于攻击测试结果与告警日志的关联
+
+        Args:
+            probe_id: 探针ID
+            signature_id: 规则SID
+            start_time: 开始时间
+            end_time: 结束时间
+
+        Returns:
+            匹配的告警日志记录，如果没有则返回 None
+        """
+        if not self.client:
+            return None
+
+        query = """
+            SELECT
+                id, node_id, instance_id, probe_type, timestamp,
+                src_ip, dest_ip, src_port, dest_port, protocol,
+                alert_msg, signature_id, severity, category
+            FROM alert_logs
+            WHERE node_id = {probe_id:String}
+              AND signature_id = {signature_id:UInt32}
+              AND timestamp >= {start_time:DateTime64}
+              AND timestamp <= {end_time:DateTime64}
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """
+
+        try:
+            result = self.client.query(query, parameters={
+                'probe_id': probe_id,
+                'signature_id': signature_id,
+                'start_time': start_time,
+                'end_time': end_time
+            })
+            
+            if not result.result_rows:
+                return None
+                
+            columns = result.column_names
+            row = result.result_rows[0]
+            row_dict = {}
+            for i, col in enumerate(columns):
+                val = row[i]
+                if hasattr(val, 'isoformat'):
+                    val = val.isoformat()
+                elif hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool, type(None))):
+                    val = str(val)
+                row_dict[col] = val
+            return row_dict
+        except Exception as e:
+            print(f"ClickHouse find_matching_alert error: {e}")
+            return None
+
+    async def update_alert_test_info(
+        self,
+        log_id: str,
+        test_id: str,
+        test_item_id: int
+    ) -> bool:
+        """更新告警日志的测试关联信息
+
+        Args:
+            log_id: 日志ID
+            test_id: 测试ID
+            test_item_id: 测试项ID
+
+        Returns:
+            是否成功
+        """
+        if not self.client:
+            return False
+
+        # ClickHouse 使用 ALTER TABLE ... UPDATE 语法
+        query = """
+            ALTER TABLE alert_logs
+            UPDATE test_id = {test_id:String},
+                   test_item_id = {test_item_id:UInt32},
+                   is_test_traffic = 1
+            WHERE id = {log_id:UUID}
+        """
+
+        try:
+            self.client.command(query, parameters={
+                'log_id': log_id,
+                'test_id': test_id,
+                'test_item_id': test_item_id
+            })
+            return True
+        except Exception as e:
+            print(f"ClickHouse update_alert_test_info error: {e}")
+            return False
+
 
 clickhouse_service = ClickHouseService()

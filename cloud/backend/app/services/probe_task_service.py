@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 
 from app.services.mysql_service import MySQLService
 from app.services.redis_service import RedisService
+from app.services.clickhouse_service import clickhouse_service
 from app.models.probe_task import (
     ProbeTask, TaskType, TaskStatus, AttackTaskPayload, TaskResult
 )
@@ -269,10 +270,10 @@ class ProbeTaskService:
         task_id: str,
         result: TaskResult
     ):
-        """根据任务结果更新测试项"""
+        """根据任务结果更新测试项，并关联匹配的告警日志"""
         # 获取任务信息
         task_row = await self.mysql_service.fetchone(
-            "SELECT payload FROM probe_tasks WHERE task_id = %s",
+            "SELECT payload, probe_id, started_at FROM probe_tasks WHERE task_id = %s",
             (task_id,)
         )
 
@@ -287,6 +288,11 @@ class ProbeTaskService:
                 return
 
         test_item_id = payload.get('test_item_id')
+        test_id = payload.get('test_id')
+        rule_sid = payload.get('rule_sid')
+        probe_id = task_row.get('probe_id')
+        started_at = task_row.get('started_at')
+        
         if not test_item_id:
             return
 
@@ -298,6 +304,39 @@ class ProbeTaskService:
         else:
             item_status = 'failed'
 
+        matched_log_id = None
+        
+        # 如果测试成功，尝试查找匹配的告警日志
+        if result.success and rule_sid and probe_id:
+            try:
+                # 定义时间窗口：从任务开始到现在，加上一些缓冲时间
+                start_time = started_at or (datetime.utcnow() - timedelta(minutes=5))
+                end_time = datetime.utcnow() + timedelta(seconds=30)
+                
+                # 查找匹配的告警日志
+                matching_alert = await clickhouse_service.find_matching_alert(
+                    probe_id=probe_id,
+                    signature_id=rule_sid,
+                    start_time=start_time,
+                    end_time=end_time
+                )
+                
+                if matching_alert:
+                    matched_log_id = str(matching_alert.get('id', ''))
+                    logger.info(f"Found matching alert for test item {test_item_id}: log_id={matched_log_id}")
+                    
+                    # 更新告警日志的测试关联信息
+                    if matched_log_id and test_id:
+                        await clickhouse_service.update_alert_test_info(
+                            log_id=matched_log_id,
+                            test_id=test_id,
+                            test_item_id=test_item_id
+                        )
+                else:
+                    logger.warning(f"No matching alert found for test item {test_item_id}, sid={rule_sid}")
+            except Exception as e:
+                logger.error(f"Error finding matching alert: {e}")
+
         # 更新测试项
         await self.mysql_service.execute(
             """
@@ -306,6 +345,7 @@ class ProbeTaskService:
                 attack_result = %s,
                 response_time_ms = %s,
                 error_message = %s,
+                matched_log_id = %s,
                 executed_at = %s,
                 updated_at = %s
             WHERE id = %s
@@ -315,11 +355,98 @@ class ProbeTaskService:
                 json.dumps(result.data) if result.data else None,
                 result.response_time_ms,
                 result.error,
+                matched_log_id,
                 result.executed_at or datetime.utcnow(),
                 datetime.utcnow(),
                 test_item_id
             )
         )
+        
+        # 检查并更新测试整体状态
+        await self._check_and_update_test_status(test_id)
+
+    async def _check_and_update_test_status(self, test_id: str):
+        """检查并更新测试整体状态
+        
+        当所有测试项都已完成时，自动将测试状态更新为 completed
+        """
+        if not test_id:
+            return
+            
+        try:
+            # 获取测试信息
+            test_row = await self.mysql_service.fetchone(
+                "SELECT id, status, total_rules FROM attack_tests WHERE test_id = %s",
+                (test_id,)
+            )
+            
+            if not test_row or test_row.get('status') != 'running':
+                return
+            
+            test_db_id = test_row.get('id')
+            total_rules = test_row.get('total_rules', 0)
+            
+            # 统计已完成的测试项
+            stats_row = await self.mysql_service.fetchone(
+                """
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+                    SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) as failed_count,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count
+                FROM attack_test_items
+                WHERE test_id = %s
+                """,
+                (test_db_id,)
+            )
+            
+            if not stats_row:
+                return
+                
+            success_count = int(stats_row.get('success_count', 0) or 0)
+            failed_count = int(stats_row.get('failed_count', 0) or 0)
+            pending_count = int(stats_row.get('pending_count', 0) or 0)
+            
+            # 如果没有待处理的测试项，则测试完成
+            if pending_count == 0:
+                await self.mysql_service.execute(
+                    """
+                    UPDATE attack_tests
+                    SET status = 'completed',
+                        success_count = %s,
+                        failed_count = %s,
+                        completed_at = %s,
+                        updated_at = %s
+                    WHERE test_id = %s
+                    """,
+                    (
+                        success_count,
+                        failed_count,
+                        datetime.utcnow(),
+                        datetime.utcnow(),
+                        test_id
+                    )
+                )
+                logger.info(f"Test {test_id} completed: success={success_count}, failed={failed_count}")
+            else:
+                # 更新成功/失败计数
+                await self.mysql_service.execute(
+                    """
+                    UPDATE attack_tests
+                    SET success_count = %s,
+                        failed_count = %s,
+                        updated_at = %s
+                    WHERE test_id = %s
+                    """,
+                    (
+                        success_count,
+                        failed_count,
+                        datetime.utcnow(),
+                        test_id
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Error checking test status: {e}")
 
     async def start_task(self, task_id: str) -> bool:
         """标记任务开始执行"""

@@ -6,6 +6,7 @@ import logging
 
 from app.services.attack_test_service import AttackTestService
 from app.services.probe_task_service import ProbeTaskService
+from app.services.clickhouse_service import clickhouse_service
 from app.services.mysql_service import mysql_service
 from app.services.redis_service import redis_service
 from app.models.attack_test import TestConfig, TestStatus
@@ -157,6 +158,7 @@ async def get_test(
                 attack_type=item.attack_type,
                 response_time_ms=item.response_time_ms,
                 error_message=item.error_message,
+                matched_log_id=item.matched_log_id,
                 executed_at=item.executed_at
             )
             for item in items
@@ -243,6 +245,23 @@ async def get_test_items(
         )
         for item in items
     ]
+
+
+@router.get("/tests/{test_id}/logs")
+async def get_test_logs(
+    test_id: str,
+    limit: int = Query(100, ge=1, le=500, description="返回数量")
+):
+    """获取与测试关联的告警日志
+    
+    返回与该攻击测试相关的所有告警日志
+    """
+    logs = await clickhouse_service.get_alerts_by_test_id(test_id, limit=limit)
+    return {
+        "logs": logs,
+        "total": len(logs),
+        "test_id": test_id
+    }
 
 
 # ========== 攻击模板管理 ==========
