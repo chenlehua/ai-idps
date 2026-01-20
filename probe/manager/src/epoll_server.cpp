@@ -139,8 +139,15 @@ void EpollServer::run() {
                 }
                 remove_from_epoll(fd);
                 connections_.erase(fd);
-            } else if (ev & EPOLLIN) {
-                handle_read(fd);
+            } else {
+                // 先处理可写事件
+                if (ev & EPOLLOUT) {
+                    handle_write(fd);
+                }
+                // 再处理可读事件
+                if (ev & EPOLLIN) {
+                    handle_read(fd);
+                }
             }
         }
     }
@@ -236,16 +243,47 @@ void EpollServer::handle_timer() {
     }
 }
 
+void EpollServer::handle_write(int fd) {
+    auto it = connections_.find(fd);
+    if (it == connections_.end()) {
+        return;
+    }
+
+    auto& conn = it->second;
+
+    // 尝试发送缓冲区中的数据
+    bool has_pending = conn->flush_write_buffer();
+
+    if (conn->is_closed()) {
+        LOG_INFO("Connection closed during write: fd=", fd);
+        if (disconnect_callback_) {
+            disconnect_callback_(fd);
+        }
+        remove_from_epoll(fd);
+        connections_.erase(fd);
+        return;
+    }
+
+    // 更新 epoll 事件
+    update_write_interest(fd);
+}
+
 void EpollServer::send_to_probe(int fd, const json& msg) {
     auto it = connections_.find(fd);
     if (it != connections_.end()) {
         it->second->send_message(msg);
+        // 发送后更新 epoll 事件
+        update_write_interest(fd);
     }
 }
 
 void EpollServer::broadcast(const json& msg) {
     for (auto& [fd, conn] : connections_) {
         conn->send_message(msg);
+    }
+    // 更新所有连接的 epoll 事件
+    for (auto& [fd, conn] : connections_) {
+        update_write_interest(fd);
     }
 }
 
@@ -258,8 +296,36 @@ void EpollServer::add_to_epoll(int fd, uint32_t events) {
     }
 }
 
+void EpollServer::modify_epoll(int fd, uint32_t events) {
+    epoll_event ev{};
+    ev.events = events;
+    ev.data.fd = fd;
+    if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ev) < 0) {
+        LOG_ERROR("epoll_ctl MOD failed for fd=", fd, ": ", strerror(errno));
+    }
+}
+
 void EpollServer::remove_from_epoll(int fd) {
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr) < 0) {
         // 可能已经被移除，忽略错误
     }
+}
+
+void EpollServer::update_write_interest(int fd) {
+    auto it = connections_.find(fd);
+    if (it == connections_.end()) {
+        return;
+    }
+
+    auto& conn = it->second;
+
+    // 基础事件：始终监听读事件，使用边缘触发
+    uint32_t events = EPOLLIN | EPOLLET;
+
+    // 如果有待发送数据，添加写事件监听
+    if (conn->has_pending_write()) {
+        events |= EPOLLOUT;
+    }
+
+    modify_epoll(fd, events);
 }

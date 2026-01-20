@@ -8,6 +8,7 @@ from app.routers import (
     logs_router,
     probes_router,
     websocket_router,
+    attacks_router,
 )
 from app.services.redis_service import redis_service
 from app.services.mysql_service import mysql_service
@@ -44,6 +45,7 @@ app.include_router(rules_router, prefix="/api/v1")
 app.include_router(logs_router, prefix="/api/v1")
 app.include_router(probes_router, prefix="/api/v1")
 app.include_router(websocket_router, prefix="/api/v1")
+app.include_router(attacks_router, prefix="/api/v1")
 
 
 @app.get("/health")

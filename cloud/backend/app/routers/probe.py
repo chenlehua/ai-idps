@@ -1,5 +1,6 @@
 from datetime import datetime
-from fastapi import APIRouter
+from typing import Optional
+from fastapi import APIRouter, Query, HTTPException
 
 from app.models.probe_protocol import (
     ProbeCommand, ProbeRequest, ProbeResponse,
@@ -8,8 +9,56 @@ from app.models.probe_protocol import (
 from app.services.probe_service import probe_service
 from app.services.rule_service import rule_service
 from app.services.log_service import log_service
+from app.services.mysql_service import mysql_service
+from app.services.redis_service import redis_service
+from app.services.probe_rule_service import ProbeRuleService
+from app.schemas.rule_update import ProbeRuleVersionResponse, ProbeRuleDownloadResponse
 
 router = APIRouter(tags=["probe"])
+
+
+# ========== Pull 模式规则同步 API ==========
+def get_probe_rule_service() -> ProbeRuleService:
+    return ProbeRuleService(mysql_service=mysql_service, redis_service=redis_service)
+
+
+@router.get("/probe/rules/version", response_model=ProbeRuleVersionResponse)
+async def check_rule_version(
+    probe_id: str = Query(..., description="探针ID"),
+    current_version: Optional[str] = Query(None, description="探针当前规则版本")
+):
+    """检查规则版本更新 (Pull 模式)
+
+    探针定期调用此接口检查是否有新版本
+    """
+    service = get_probe_rule_service()
+    result = await service.check_version(probe_id, current_version)
+    return ProbeRuleVersionResponse(**result)
+
+
+@router.get("/probe/rules/download", response_model=ProbeRuleDownloadResponse)
+async def download_rules(
+    probe_id: str = Query(..., description="探针ID"),
+    version: Optional[str] = Query(None, description="指定版本（默认最新）")
+):
+    """下载规则内容 (Pull 模式)
+
+    探针调用此接口下载规则内容
+    """
+    service = get_probe_rule_service()
+    result = await service.get_rules_content(version=version, probe_id=probe_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="规则版本不存在")
+
+    # 记录探针的规则版本
+    await service.record_probe_version(probe_id, result['version'])
+
+    return ProbeRuleDownloadResponse(
+        version=result['version'],
+        content=result['content'],
+        checksum=result['checksum']
+    )
 
 
 @router.post("/probe", response_model=ProbeResponse)

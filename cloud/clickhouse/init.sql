@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS nids.alert_logs (
     severity UInt8,
     category LowCardinality(String),
     raw_log String,
+    -- Phase 1: 新增字段用于攻击测试关联
+    test_id String DEFAULT '' COMMENT '关联的攻击测试ID',
+    test_item_id UInt32 DEFAULT 0 COMMENT '关联的测试项ID',
+    is_test_traffic UInt8 DEFAULT 0 COMMENT '是否为测试流量',
     created_at DateTime DEFAULT now()
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
@@ -35,6 +39,7 @@ AS SELECT
     severity,
     count() AS alert_count
 FROM nids.alert_logs
+WHERE is_test_traffic = 0
 GROUP BY hour, node_id, severity;
 
 -- 按探针类型统计视图
@@ -48,4 +53,19 @@ AS SELECT
     category,
     count() AS alert_count
 FROM nids.alert_logs
+WHERE is_test_traffic = 0
 GROUP BY hour, probe_type, category;
+
+-- Phase 1: 攻击测试结果统计视图
+CREATE MATERIALIZED VIEW IF NOT EXISTS nids.test_results_stats
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(hour)
+ORDER BY (hour, test_id, node_id)
+AS SELECT
+    toStartOfHour(timestamp) AS hour,
+    test_id,
+    node_id,
+    count() AS matched_count
+FROM nids.alert_logs
+WHERE is_test_traffic = 1 AND test_id != ''
+GROUP BY hour, test_id, node_id;

@@ -1,9 +1,12 @@
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from app.services.redis_service import redis_service
 from app.services.mysql_service import mysql_service
+
+# 探针离线超时时间（秒）
+PROBE_OFFLINE_TIMEOUT = 60
 
 
 class ProbeService:
@@ -128,11 +131,14 @@ class ProbeService:
 
         # 获取在线探针集合
         online_probes = await redis_service.get_online_probes()
+        now = datetime.utcnow()
 
         result = []
         for probe in probes:
             # 转换 datetime 对象
             probe_dict = dict(probe)
+            last_seen = probe_dict.get('last_seen')
+
             if probe_dict.get('last_seen'):
                 probe_dict['last_seen'] = probe_dict['last_seen'].isoformat()
             if probe_dict.get('created_at'):
@@ -143,9 +149,15 @@ class ProbeService:
                 except:
                     pass
 
-            # 检查是否在线（基于 Redis 缓存）
-            if probe_dict['node_id'] in online_probes:
+            # 检查是否在线（基于 last_seen 时间判断）
+            # 如果超过 PROBE_OFFLINE_TIMEOUT 秒没有心跳，则标记为离线
+            if last_seen and (now - last_seen).total_seconds() < PROBE_OFFLINE_TIMEOUT:
                 probe_dict['status'] = 'online'
+            else:
+                probe_dict['status'] = 'offline'
+                # 从在线集合中移除（清理过期数据）
+                if probe_dict['node_id'] in online_probes:
+                    await redis_service.remove_online_probe(probe_dict['node_id'])
 
             # 获取探针实例
             instances = await mysql_service.fetchall(

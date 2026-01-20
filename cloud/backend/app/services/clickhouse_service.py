@@ -212,5 +212,80 @@ class ClickHouseService:
             print(f"ClickHouse count error: {e}")
             return 0
 
+    async def get_alert_count_by_sid(self, sid: int, hours: int = 24) -> int:
+        """获取指定规则SID的告警数量
+
+        Args:
+            sid: 规则SID
+            hours: 时间范围(小时)
+
+        Returns:
+            告警数量
+        """
+        if not self.client:
+            return 0
+
+        query = f"""
+            SELECT count() FROM alert_logs
+            WHERE signature_id = {{sid:UInt32}}
+              AND timestamp >= now() - INTERVAL {hours} HOUR
+              AND is_test_traffic = 0
+        """
+
+        try:
+            result = self.client.query(query, parameters={'sid': sid})
+            return result.result_rows[0][0] if result.result_rows else 0
+        except Exception as e:
+            print(f"ClickHouse get_alert_count_by_sid error: {e}")
+            return 0
+
+    async def get_alerts_by_test_id(
+        self,
+        test_id: str,
+        limit: int = 100
+    ) -> List[dict]:
+        """获取攻击测试相关的告警日志
+
+        Args:
+            test_id: 测试ID
+            limit: 返回数量限制
+
+        Returns:
+            告警日志列表
+        """
+        if not self.client:
+            return []
+
+        query = f"""
+            SELECT
+                id, node_id, instance_id, probe_type, timestamp,
+                src_ip, dest_ip, src_port, dest_port, protocol,
+                alert_msg, signature_id, severity, category,
+                test_id, test_item_id
+            FROM alert_logs
+            WHERE test_id = {{test_id:String}}
+            ORDER BY timestamp DESC
+            LIMIT {limit}
+        """
+
+        try:
+            result = self.client.query(query, parameters={'test_id': test_id})
+            columns = result.column_names
+            rows = []
+            for row in result.result_rows:
+                row_dict = {}
+                for i, col in enumerate(columns):
+                    val = row[i]
+                    if hasattr(val, 'isoformat'):
+                        val = val.isoformat()
+                    elif hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool, type(None))):
+                        val = str(val)
+                    row_dict[col] = val
+                rows.append(row_dict)
+            return rows
+        except Exception as e:
+            print(f"ClickHouse get_alerts_by_test_id error: {e}")
+            return []
+
 
 clickhouse_service = ClickHouseService()

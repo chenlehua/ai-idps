@@ -1,12 +1,16 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import DashboardPage from './pages/Dashboard'
-import RulesPage from './pages/Rules'
+import RuleUpdatePage from './pages/RuleUpdate'
+import RuleListPage from './pages/RuleList'
+import AttackTestPage from './pages/AttackTest'
 import LogsPage from './pages/Logs'
 import ProbesPage from './pages/Probes'
 
 const navItems = [
   { path: '/', label: '仪表盘' },
-  { path: '/rules', label: '规则管理' },
+  { path: '/rules', label: '规则列表' },
+  { path: '/rules/update', label: '规则更新' },
+  { path: '/attacks', label: '攻击测试' },
   { path: '/logs', label: '日志展示' },
   { path: '/probes', label: '探针管理' }
 ]
@@ -22,6 +26,7 @@ export default function App() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/'}
                 className={({ isActive }) =>
                   `rounded px-3 py-1 ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`
                 }
@@ -36,7 +41,9 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-6 py-6">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/rules" element={<RulesPage />} />
+          <Route path="/rules" element={<RuleListPage />} />
+          <Route path="/rules/update" element={<RuleUpdatePage />} />
+          <Route path="/attacks" element={<AttackTestPage />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/probes" element={<ProbesPage />} />
         </Routes>

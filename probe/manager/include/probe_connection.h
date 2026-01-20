@@ -16,8 +16,14 @@ public:
     // 读取消息，返回解析后的 JSON，如果没有完整消息则返回 nullopt
     std::optional<json> read_message();
 
-    // 发送消息
+    // 发送消息（异步，数据会先放入写缓冲区）
     void send_message(const json& msg);
+
+    // 尝试发送写缓冲区中的数据，返回是否还有待发送数据
+    bool flush_write_buffer();
+
+    // 检查是否有待发送数据
+    bool has_pending_write() const { return !write_buffer_.empty(); }
 
     // 检查连接是否已关闭
     bool is_closed() const { return closed_; }
@@ -39,6 +45,7 @@ private:
     int fd_;
     bool closed_;
     std::vector<uint8_t> read_buffer_;
+    std::vector<uint8_t> write_buffer_;  // 异步写缓冲区
     std::string probe_id_;
     std::string probe_type_;
 };

@@ -48,12 +48,12 @@ void Config::load(const std::string& path) {
                 log_flush_interval = config["log_flush_interval"].get<int>();
             }
 
-            LOG_INFO("Config loaded from: ", path);
+            LOG_INFO("Config loaded from: {}", path);
         } catch (const json::exception& e) {
-            LOG_ERROR("Failed to parse config file: ", e.what());
+            LOG_ERROR("Failed to parse config file: {}", e.what());
         }
     } else {
-        LOG_WARN("Config file not found: ", path, ", using defaults/env");
+        LOG_WARN("Config file not found: {}, using defaults/env", path);
     }
 
     // 环境变量优先级最高，覆盖配置文件
@@ -81,11 +81,11 @@ void Config::load(const std::string& path) {
 
     // 打印配置
     LOG_INFO("Configuration:");
-    LOG_INFO("  probe_id: ", probe_id);
-    LOG_INFO("  probe_name: ", probe_name);
-    LOG_INFO("  probe_ip: ", probe_ip);
-    LOG_INFO("  cloud_url: ", cloud_url);
-    LOG_INFO("  listen_port: ", listen_port);
-    LOG_INFO("  rules_dir: ", rules_dir);
-    LOG_INFO("  heartbeat_interval: ", heartbeat_interval, "s");
+    LOG_INFO("  probe_id: {}", probe_id);
+    LOG_INFO("  probe_name: {}", probe_name);
+    LOG_INFO("  probe_ip: {}", probe_ip);
+    LOG_INFO("  cloud_url: {}", cloud_url);
+    LOG_INFO("  listen_port: {}", listen_port);
+    LOG_INFO("  rules_dir: {}", rules_dir);
+    LOG_INFO("  heartbeat_interval: {}s", heartbeat_interval);
 }

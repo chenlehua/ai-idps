@@ -37,10 +37,15 @@ public:
 private:
     void handle_accept();
     void handle_read(int fd);
+    void handle_write(int fd);  // 处理可写事件
     void handle_timer();
 
     void add_to_epoll(int fd, uint32_t events);
+    void modify_epoll(int fd, uint32_t events);  // 修改 epoll 事件
     void remove_from_epoll(int fd);
+
+    // 根据连接的写缓冲区状态更新 epoll 事件
+    void update_write_interest(int fd);
 
 private:
     int port_;

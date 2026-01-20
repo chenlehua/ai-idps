@@ -1,0 +1,13 @@
+{
+    "manager_host": "127.0.0.1",
+    "manager_port": 9001,
+    "probe_id": "attack-tool-01",
+    "probe_type": "attack_tool",
+    "default_target_host": "127.0.0.1",
+    "default_target_port": 80,
+    "connect_timeout_ms": 5000,
+    "request_timeout_ms": 30000,
+    "heartbeat_interval_ms": 30000,
+    "max_reconnect_attempts": 10,
+    "reconnect_interval_ms": 5000
+}

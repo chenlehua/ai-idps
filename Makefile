@@ -20,6 +20,7 @@
 #   redis/mysql/clickhouse - 数据库服务
 #   probe-manager   - Probe Manager (C++本地服务)
 #   nids-probe      - NIDS Probe (C++本地服务)
+#   attack-tool     - Attack Tool (C++攻击测试工具)
 #   probes          - 所有探针 (Manager + NIDS)
 #   suricata        - Suricata 检测引擎
 
@@ -31,6 +32,7 @@ DOCKER_COMPOSE := docker compose -f $(COMPOSE_FILE)
 PROBE_BUILD_DIR := probe/build
 PROBE_BIN := $(PROBE_BUILD_DIR)/manager/probe-manager
 NIDS_BIN := $(PROBE_BUILD_DIR)/nids/nids-probe
+ATTACK_TOOL_BIN := $(PROBE_BUILD_DIR)/attack_tool/attack_tool
 
 # Suricata 配置
 SURICATA_SRC_DIR := third_party/suricata
@@ -75,6 +77,11 @@ else ifeq ($(SERVICE),nids-probe)
 	@mkdir -p $(PROBE_BUILD_DIR)
 	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) nids-probe
 	@echo "Build complete: $(NIDS_BIN)"
+else ifeq ($(SERVICE),attack-tool)
+	@echo "=== Building Attack Tool ==="
+	@mkdir -p $(PROBE_BUILD_DIR)
+	@cd $(PROBE_BUILD_DIR) && CXX=g++ cmake .. && make -j$$(nproc) attack_tool
+	@echo "Build complete: $(ATTACK_TOOL_BIN)"
 else ifeq ($(SERVICE),probes)
 	@echo "=== Building All Probes (Manager + NIDS) ==="
 	@mkdir -p $(PROBE_BUILD_DIR)
@@ -115,6 +122,10 @@ else ifeq ($(SERVICE),nids-probe)
 	@echo "=== Rebuilding NIDS Probe ==="
 	@rm -rf $(PROBE_BUILD_DIR)
 	@$(MAKE) build SERVICE=nids-probe
+else ifeq ($(SERVICE),attack-tool)
+	@echo "=== Rebuilding Attack Tool ==="
+	@rm -rf $(PROBE_BUILD_DIR)
+	@$(MAKE) build SERVICE=attack-tool
 else ifeq ($(SERVICE),probes)
 	@echo "=== Rebuilding All Probes ==="
 	@rm -rf $(PROBE_BUILD_DIR)
@@ -331,6 +342,10 @@ else ifeq ($(SERVICE),nids-probe)
 	@echo "Cleaning NIDS Probe build..."
 	@rm -rf $(PROBE_BUILD_DIR)/nids
 	@echo "Done."
+else ifeq ($(SERVICE),attack-tool)
+	@echo "Cleaning Attack Tool build..."
+	@rm -rf $(PROBE_BUILD_DIR)/attack_tool
+	@echo "Done."
 else ifeq ($(SERVICE),probes)
 	@echo "Cleaning all probes build..."
 	@rm -rf $(PROBE_BUILD_DIR)
@@ -386,6 +401,18 @@ else ifeq ($(SERVICE),nids-probe)
 		echo "Systemd service installed."; \
 	fi
 	@echo "Installed to /usr/local/bin/nids-probe"
+else ifeq ($(SERVICE),attack-tool)
+	@echo "=== Installing Attack Tool ==="
+	@if [ ! -f $(ATTACK_TOOL_BIN) ]; then \
+		echo "Attack Tool not built. Run 'make build SERVICE=attack-tool' first."; \
+		exit 1; \
+	fi
+	@sudo cp $(ATTACK_TOOL_BIN) /usr/local/bin/
+	@sudo mkdir -p /etc/attack-tool
+	@if [ ! -f /etc/attack-tool/attack_tool.json ] && [ -f probe/attack_tool/config/attack_tool.json ]; then \
+		sudo cp probe/attack_tool/config/attack_tool.json /etc/attack-tool/attack_tool.json; \
+	fi
+	@echo "Installed to /usr/local/bin/attack_tool"
 else ifeq ($(SERVICE),probes)
 	@$(MAKE) install SERVICE=probe-manager
 	@$(MAKE) install SERVICE=nids-probe
@@ -401,7 +428,7 @@ else ifeq ($(SERVICE),suricata)
 	@cd $(SURICATA_SRC_DIR) && sudo make install-conf
 	@echo "Suricata installed to /usr/local/bin/suricata"
 else
-	@echo "Usage: make install SERVICE=<probe-manager|nids-probe|probes|suricata>"
+	@echo "Usage: make install SERVICE=<probe-manager|nids-probe|attack-tool|probes|suricata>"
 endif
 
 uninstall:
@@ -425,6 +452,10 @@ else ifeq ($(SERVICE),nids-probe)
 	fi
 	@sudo rm -f /usr/local/bin/nids-probe
 	@echo "Uninstalled."
+else ifeq ($(SERVICE),attack-tool)
+	@echo "=== Uninstalling Attack Tool ==="
+	@sudo rm -f /usr/local/bin/attack_tool
+	@echo "Uninstalled."
 else ifeq ($(SERVICE),probes)
 	@$(MAKE) uninstall SERVICE=nids-probe
 	@$(MAKE) uninstall SERVICE=probe-manager
@@ -437,7 +468,7 @@ else ifeq ($(SERVICE),suricata)
 	fi
 	@echo "Uninstalled."
 else
-	@echo "Usage: make uninstall SERVICE=<probe-manager|nids-probe|probes|suricata>"
+	@echo "Usage: make uninstall SERVICE=<probe-manager|nids-probe|attack-tool|probes|suricata>"
 endif
 
 # ============================================================
@@ -464,73 +495,71 @@ download-rules:
 # ============================================================
 
 list:
-	@echo "╔══════════════════════════════════════════════════════════════════╗"
-	@echo "║                      AI-IDPS 服务状态                            ║"
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
-	@echo "║ [云端服务] Docker Compose                                        ║"
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
+	@echo ""
+	@echo "=== AI-IDPS 服务状态 ==="
+	@echo "[云端服务]"
 	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "║  ⚠  Docker 未安装                                                ║"; \
+		echo "  Docker 未安装"; \
 	elif ! docker info >/dev/null 2>&1; then \
-		echo "║  ⚠  Docker 未运行                                                ║"; \
+		echo "  Docker 未运行"; \
 	else \
-		docker compose -f $(COMPOSE_FILE) ps -a --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null | \
-		tail -n +2 | while IFS= read -r line; do \
-			printf '║  %-66s ║\n' "$$line"; \
+		for svc in nginx frontend backend redis mysql clickhouse; do \
+			STATUS=$$(docker compose -f $(COMPOSE_FILE) ps -a --format '{{.Service}}\t{{.Status}}' 2>/dev/null | grep "^$$svc" | cut -f2); \
+			if [ -z "$$STATUS" ]; then \
+				printf "  %-14s ○ 未创建\n" "$$svc"; \
+			elif echo "$$STATUS" | grep -q "^Up"; then \
+				UPTIME=$$(echo "$$STATUS" | sed 's/Up //'); \
+				printf "  %-14s ● 运行中  %s\n" "$$svc" "$$UPTIME"; \
+			else \
+				printf "  %-14s ○ 已停止\n" "$$svc"; \
+			fi; \
 		done; \
-		if ! docker compose -f $(COMPOSE_FILE) ps -a 2>/dev/null | grep -v "^NAME" | grep -q .; then \
-			echo "║  (无容器 - 使用 make up 启动)                                    ║"; \
-		fi; \
 	fi
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
-	@echo "║ [探针服务] Probe Manager                                         ║"
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
+	@echo "[探针服务]"
 	@if [ ! -f $(PROBE_BIN) ]; then \
-		echo "║  ○ 构建: 未构建  (make build SERVICE=probe-manager)               ║"; \
+		printf "  %-14s ○ 未构建\n" "probe-manager"; \
+	elif systemctl is-active --quiet probe-manager 2>/dev/null; then \
+		UPTIME=$$(systemctl show probe-manager --property=ActiveEnterTimestamp 2>/dev/null | cut -d= -f2); \
+		printf "  %-14s ● 运行中  %s\n" "probe-manager" "$$UPTIME"; \
+	elif [ -f $(PROBE_PID_FILE) ] && kill -0 $$(cat $(PROBE_PID_FILE)) 2>/dev/null; then \
+		PID=$$(cat $(PROBE_PID_FILE)); \
+		UPTIME=$$(ps -o etime= -p $$PID 2>/dev/null | tr -d ' '); \
+		printf "  %-14s ● 运行中  PID:%-8s 运行时间:%s\n" "probe-manager" "$$PID" "$$UPTIME"; \
 	else \
-		echo "║  ✓ 构建: 已完成                                                   ║"; \
-		if systemctl is-active --quiet probe-manager 2>/dev/null; then \
-			echo "║  ● 状态: 运行中 (systemd)                                         ║"; \
-		elif [ -f $(PROBE_PID_FILE) ] && kill -0 $$(cat $(PROBE_PID_FILE)) 2>/dev/null; then \
-			printf '║  ● 状态: 运行中 (PID: %-44s ║\n' "$$(cat $(PROBE_PID_FILE)))"; \
-		elif ps aux | grep -E "^\S+\s+\S+.*probe-manager" | grep -v defunct | grep -v grep >/dev/null 2>&1; then \
-			echo "║  ● 状态: 运行中 (无PID文件)                                       ║"; \
-		else \
-			echo "║  ○ 状态: 已停止  (make up SERVICE=probe-manager)                  ║"; \
-		fi; \
+		printf "  %-14s ○ 已停止\n" "probe-manager"; \
 	fi
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
-	@echo "║ [探针服务] NIDS Probe                                            ║"
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
 	@if [ ! -f $(NIDS_BIN) ]; then \
-		echo "║  ○ 构建: 未构建  (make build SERVICE=nids-probe)                  ║"; \
+		printf "  %-14s ○ 未构建\n" "nids-probe"; \
+	elif systemctl is-active --quiet nids-probe 2>/dev/null; then \
+		UPTIME=$$(systemctl show nids-probe --property=ActiveEnterTimestamp 2>/dev/null | cut -d= -f2); \
+		printf "  %-14s ● 运行中  %s\n" "nids-probe" "$$UPTIME"; \
+	elif [ -f $(NIDS_PID_FILE) ] && kill -0 $$(cat $(NIDS_PID_FILE)) 2>/dev/null; then \
+		PID=$$(cat $(NIDS_PID_FILE)); \
+		UPTIME=$$(ps -o etime= -p $$PID 2>/dev/null | tr -d ' '); \
+		printf "  %-14s ● 运行中  PID:%-8s 运行时间:%s\n" "nids-probe" "$$PID" "$$UPTIME"; \
 	else \
-		echo "║  ✓ 构建: 已完成                                                   ║"; \
-		if systemctl is-active --quiet nids-probe 2>/dev/null; then \
-			echo "║  ● 状态: 运行中 (systemd)                                         ║"; \
-		elif [ -f $(NIDS_PID_FILE) ] && kill -0 $$(cat $(NIDS_PID_FILE)) 2>/dev/null; then \
-			printf '║  ● 状态: 运行中 (PID: %-44s ║\n' "$$(cat $(NIDS_PID_FILE)))"; \
-		elif ps aux | grep -E "^\S+\s+\S+.*nids-probe" | grep -v defunct | grep -v grep >/dev/null 2>&1; then \
-			echo "║  ● 状态: 运行中 (无PID文件)                                       ║"; \
-		else \
-			echo "║  ○ 状态: 已停止  (make up SERVICE=nids-probe)                     ║"; \
-		fi; \
+		printf "  %-14s ○ 已停止\n" "nids-probe"; \
 	fi
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
-	@echo "║ [依赖] Suricata                                                  ║"
-	@echo "╠══════════════════════════════════════════════════════════════════╣"
-	@if command -v suricata >/dev/null 2>&1; then \
+	@echo "[工具]"
+	@if [ ! -f $(ATTACK_TOOL_BIN) ]; then \
+		printf "  %-14s ○ 未构建\n" "attack-tool"; \
+	elif [ -f /usr/local/bin/attack_tool ]; then \
+		printf "  %-14s ✓ 已构建  已安装\n" "attack-tool"; \
+	else \
+		printf "  %-14s ✓ 已构建  未安装\n" "attack-tool"; \
+	fi
+	@echo "[依赖]"
+	@if ! command -v suricata >/dev/null 2>&1; then \
+		printf "  %-14s ○ 未安装\n" "suricata"; \
+	elif systemctl is-active --quiet suricata 2>/dev/null; then \
 		VERSION=$$(suricata -V 2>&1 | head -1 | cut -d' ' -f5); \
-		printf '║  ✓ 已安装: %-56s ║\n' "$$VERSION"; \
-		if systemctl is-active --quiet suricata 2>/dev/null; then \
-			echo "║  ● 状态: 运行中 (systemd)                                         ║"; \
-		else \
-			echo "║  ○ 状态: 已停止  (make up SERVICE=suricata)                        ║"; \
-		fi; \
+		UPTIME=$$(systemctl show suricata --property=ActiveEnterTimestamp 2>/dev/null | cut -d= -f2); \
+		printf "  %-14s ● 运行中  版本:%-8s %s\n" "suricata" "$$VERSION" "$$UPTIME"; \
 	else \
-		echo "║  ○ 未安装  (make build/install SERVICE=suricata)                ║"; \
+		VERSION=$$(suricata -V 2>&1 | head -1 | cut -d' ' -f5); \
+		printf "  %-14s ○ 已停止  版本:%s\n" "suricata" "$$VERSION"; \
 	fi
-	@echo "╚══════════════════════════════════════════════════════════════════╝"
+	@echo ""
 
 status: list
 
@@ -564,6 +593,7 @@ help:
 	@echo "  clickhouse     ClickHouse服务"
 	@echo "  probe-manager  Probe Manager"
 	@echo "  nids-probe     NIDS Probe"
+	@echo "  attack-tool    Attack Tool (攻击测试工具)"
 	@echo "  probes         所有探针 (Manager + NIDS)"
 	@echo "  suricata       Suricata 检测引擎"
 	@echo ""
@@ -575,6 +605,7 @@ help:
 	@echo "示例:"
 	@echo "  make build                          构建所有云端服务"
 	@echo "  make build SERVICE=probes           构建所有探针"
+	@echo "  make build SERVICE=attack-tool      构建 Attack Tool"
 	@echo "  make up                             启动所有云端服务"
 	@echo "  make up SERVICE=probe-manager       启动 Probe Manager"
 	@echo "  make logs SERVICE=backend           查看后端日志"

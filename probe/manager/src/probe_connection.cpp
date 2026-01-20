@@ -105,31 +105,47 @@ void ProbeConnection::send_message(const json& msg) {
         uint32_t len = htonl(static_cast<uint32_t>(payload.size()));
 
         // 构造消息：4字节长度 + JSON payload
-        std::vector<uint8_t> buffer;
-        buffer.resize(protocol::HEADER_SIZE + payload.size());
-        memcpy(buffer.data(), &len, sizeof(len));
-        memcpy(buffer.data() + protocol::HEADER_SIZE, payload.data(), payload.size());
+        std::vector<uint8_t> data;
+        data.resize(protocol::HEADER_SIZE + payload.size());
+        memcpy(data.data(), &len, sizeof(len));
+        memcpy(data.data() + protocol::HEADER_SIZE, payload.data(), payload.size());
 
-        // 发送（可能需要多次发送）
-        size_t sent = 0;
-        while (sent < buffer.size()) {
-            ssize_t n = send(fd_, buffer.data() + sent, buffer.size() - sent, MSG_NOSIGNAL);
-            if (n > 0) {
-                sent += n;
-            } else if (n < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // 等待可写（简化处理：忙等待）
-                    continue;
-                } else if (errno == EINTR) {
-                    continue;
-                } else {
-                    LOG_ERROR("send error on fd=", fd_, ": ", strerror(errno));
-                    closed_ = true;
-                    return;
-                }
-            }
-        }
+        // 将数据追加到写缓冲区
+        write_buffer_.insert(write_buffer_.end(), data.begin(), data.end());
+
+        // 尝试立即发送
+        flush_write_buffer();
     } catch (const std::exception& e) {
         LOG_ERROR("send_message error: ", e.what());
     }
+}
+
+bool ProbeConnection::flush_write_buffer() {
+    if (closed_ || fd_ < 0 || write_buffer_.empty()) {
+        return false;
+    }
+
+    while (!write_buffer_.empty()) {
+        ssize_t n = send(fd_, write_buffer_.data(), write_buffer_.size(), MSG_NOSIGNAL);
+        if (n > 0) {
+            // 移除已发送的数据
+            write_buffer_.erase(write_buffer_.begin(), write_buffer_.begin() + n);
+        } else if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 发送缓冲区已满，等待 EPOLLOUT 事件
+                return true;  // 还有待发送数据
+            } else if (errno == EINTR) {
+                continue;  // 被信号中断，重试
+            } else {
+                LOG_ERROR("send error on fd=", fd_, ": ", strerror(errno));
+                closed_ = true;
+                return false;
+            }
+        } else {
+            // n == 0，不应该发生
+            break;
+        }
+    }
+
+    return !write_buffer_.empty();
 }
